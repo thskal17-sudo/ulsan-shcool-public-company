@@ -61,10 +61,9 @@ class BoardCollector(Collector):
         postings: list[Posting] = []
         seen: set[str] = set()
         for page in range(1, max(1, self.source.pages) + 1):
-            url = self.page_url(page)
-            if url is None:
+            resp = self.fetch_page(page)
+            if resp is None:
                 break
-            resp = self.http.get(url)
             rows = parse_board(resp.content, resp.url, opts, self.today)
             fresh = [r for r in rows if r.key not in seen]
             for r in fresh:
@@ -88,6 +87,10 @@ class BoardCollector(Collector):
                 break
         return postings
 
+    def fetch_page(self, page: int):
+        url = self.page_url(page)
+        return None if url is None else self.http.get(url)
+
     def page_url(self, page: int) -> str | None:
         url = self.source.url or ""
         if page == 1:
@@ -96,6 +99,39 @@ class BoardCollector(Collector):
         if not param:
             return None
         return set_query(url, **{param: page})
+
+
+class FormBoardCollector(BoardCollector):
+    """검색 폼을 POST 해야 목록이 나오는 게시판 (예: 잡알리오 - 폼의 _csrf 토큰이 필요).
+
+    목록 화면을 한 번 GET 해서 폼의 숨은 값(토큰 등)을 얻은 뒤, 검색 조건을 더해 POST 한다.
+    options
+        form_selector   폼 CSS 셀렉터 (기본 form)
+        data            검색 조건 (예: {location: R3016})
+        page_param      폼의 쪽 번호 이름 (예: pageNo)
+    """
+
+    _form: tuple[str, dict[str, str]] | None = None
+
+    def fetch_page(self, page: int):
+        opts = self.source.options
+        if page > 1 and not opts.get("page_param"):
+            return None
+        if self._form is None:
+            resp = self.http.get(self.source.url or "")
+            soup = BeautifulSoup(resp.content, "lxml")
+            form = soup.select_one(opts.get("form_selector", "form"))
+            if form is None:
+                raise ValueError(f"검색 폼을 찾지 못함: {opts.get('form_selector', 'form')}")
+            fields = {
+                i["name"]: i.get("value", "") for i in form.find_all("input", {"type": "hidden"}) if i.get("name")
+            }
+            self._form = (urljoin(resp.url, form.get("action") or "") or resp.url, fields)
+        action, fields = self._form
+        data = {**fields, **opts.get("data", {})}
+        if opts.get("page_param"):
+            data[opts["page_param"]] = str(page)
+        return self.http.post(action, data=data)
 
 
 def set_query(url: str, **params) -> str:

@@ -27,33 +27,41 @@ sources:
     phase: 1
     enabled: true
     verified: false
-  - id: alio_api
-    name: 잡알리오 공공기관 채용정보 API
+  - id: gojobs_list
+    name: 나라일터 모집공고 (기관명에 '울산' 포함)
     org_type: 국가·공공기관
     district: 울산전체
-    collector: alio_api
-    url: https://www.data.go.kr/data/15125273/openapi.do
-    params:
-      work_region: 울산
-    auth_env: DATA_GO_KR_KEY
+    collector: generic_board
+    # 기관명 검색(searchSelectninsttnm=울산)은 GET 으로도 되고, 울산 소재 국가기관·지자체·학교 공고가 나온다
+    url: https://www.gojobs.go.kr/apmList.do?menuNo=401&searchJobsecode=020&searchSelectninsttnm=%EC%9A%B8%EC%82%B0&pageIndex=1
+    pages: 3
     keyword_filter: true
-    phase: 2
-    enabled: false  # 3단계: 공공데이터포털 인증키와 응답 형식 확인 후 구현
+    phase: 3
+    enabled: true
     verified: false
+    options:
+      page_param: pageIndex
+      # 제목 링크 fn_apmView('020', '303834') → 상세는 GET 으로도 열림
+      link_template: "https://www.gojobs.go.kr/apmView.do?empmnsn={1}&searchJobsecode={0}&menuNo=401&selMenuNo=400"
+      key_param: empmnsn
 
-  - id: gojobs_api
-    name: 나라일터 공공취업정보 API
+  - id: alio_recruit
+    name: 잡알리오 공공기관 채용정보 (근무지 울산)
     org_type: 국가·공공기관
     district: 울산전체
-    collector: gojobs_api
-    url: https://www.data.go.kr/data/15000485/openapi.do
-    params:
-      work_region: 울산
-    auth_env: DATA_GO_KR_KEY
+    collector: form_board  # 목록은 검색 폼(_csrf 토큰)을 POST 해야 나온다
+    url: https://job.alio.go.kr/recruit.do
+    pages: 2
     keyword_filter: true
-    phase: 2
-    enabled: false  # 3단계: 공공데이터포털 인증키와 응답 형식 확인 후 구현
+    phase: 3
+    enabled: true
     verified: false
+    options:
+      form_selector: "form#frm"
+      data:
+        search_yn: "Y"
+        location: R3016  # 울산광역시
+      page_param: pageNo
 
   # ─────────────────────────────── 교육청·학교
   - id: use_job_general

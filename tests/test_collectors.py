@@ -112,3 +112,41 @@ def test_ujcmc_style_template(fixture_bytes):
     rows = parse_board(html, "https://www.ujcmc.or.kr/bbs/employ/boardList.do", opts, TODAY)
     assert rows[0].url == "https://www.ujcmc.or.kr/bbs/employ/boardView.do?n=528&p=view"
     assert rows[0].key == "528"
+
+
+class _Resp:
+    def __init__(self, url, html):
+        self.url, self.content = url, html.encode()
+
+
+class _FormHttp:
+    def __init__(self):
+        self.posts = []
+
+    def get(self, url, **kw):
+        return _Resp(url, '<form id="frm" action=""><input type="hidden" name="_csrf" value="tok"/>'
+                          '<input type="hidden" name="pageNo" value="1"/></form>')
+
+    def post(self, url, data=None, **kw):
+        self.posts.append((url, dict(data)))
+        rows = "".join(
+            f'<tr><td>{n}</td><td><a href="/recruitview.do?idx={n}">울산 강사 모집 {n}</a></td><td>2026.09.2{n}</td></tr>'
+            for n in (1, 2)
+        )
+        return _Resp(url, f"<table><tr><th>번호</th><th>채용제목</th><th>등록일</th></tr>{rows}</table>")
+
+
+def test_form_board_posts_search_form_with_token():
+    from ulsan_jobs.collectors.board import FormBoardCollector
+    from ulsan_jobs.config import Source
+
+    src = Source("alio", "잡알리오", "form_board", url="https://job.example.kr/recruit.do", pages=1,
+                 options={"form_selector": "form#frm", "data": {"location": "R3016"}, "page_param": "pageNo",
+                          "key_param": "idx"})
+    http = _FormHttp()
+    items = FormBoardCollector(src, http, date(2026, 9, 27)).collect()
+    assert http.posts == [("https://job.example.kr/recruit.do", {"_csrf": "tok", "pageNo": "1", "location": "R3016"})]
+    assert [(p.title, p.post_key, p.url) for p in items] == [
+        ("울산 강사 모집 1", "1", "https://job.example.kr/recruitview.do?idx=1"),
+        ("울산 강사 모집 2", "2", "https://job.example.kr/recruitview.do?idx=2"),
+    ]
