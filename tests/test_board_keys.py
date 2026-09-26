@@ -95,3 +95,19 @@ def test_template_wins_over_plain_href_when_onclick_has_args():
     [row] = parse_board(html.encode(), "https://www.ulsannamgu.go.kr/edu/board/eduBoard/list.do", opts, date(2026, 9, 27))
     assert row.url == "https://www.ulsannamgu.go.kr/edu/board/eduBoard/view.do?nttId=534458"
     assert row.key == "534458"
+
+
+def test_empty_anchor_title_in_cell_and_row_filter():
+    # 잡알리오: <a href="/recruitview.do?idx=1"/>제목</a> - 링크는 비어 있고 제목은 칸에
+    html = """<table><tr><th></th><th>번호</th><th>채용제목</th><th>기관명</th><th>근무지</th><th>등록일</th><th>마감일</th></tr>
+    <tr><td><input type="checkbox"/></td><td>2</td><td class="left"><a href="/recruitview.do?idx=305344" target="_blank"/>체육 강사 채용 공고</a></td>
+        <td>울산항만공사</td><td> 울산 </td><td>2026.09.24</td><td> 26.10.08</td></tr>
+    <tr><td><input type="checkbox"/></td><td>1</td><td class="left"><a href="/recruitview.do?idx=305278" target="_blank"/>수영 강사 채용</a></td>
+        <td>국립공원공단</td><td> 충북 </td><td>2026.09.23</td><td> 26.10.08</td></tr>
+    </table>"""
+    opts = {"key_param": "idx", "row_must_contain": "울산"}
+    rows = parse_board(html.encode(), "https://job.alio.go.kr/recruit.do", opts, date(2026, 9, 27))
+    assert [(r.title, r.key, r.org, r.posted, r.deadline) for r in rows] == [
+        ("체육 강사 채용 공고", "305344", "울산항만공사", date(2026, 9, 24), date(2026, 10, 8)),
+    ]
+    assert rows[0].url == "https://job.alio.go.kr/recruitview.do?idx=305344"

@@ -61,6 +61,8 @@ sources:
         search_yn: "Y"
         location: R3016  # 울산광역시
       page_param: pageNo
+      key_param: idx
+      row_must_contain: 울산  # 근무지 열 확인 (검색 조건이 안 먹어도 다른 지역 공고가 섞이지 않게)
 
   # ─────────────────────────────── 교육청·학교
   - id: use_job_general

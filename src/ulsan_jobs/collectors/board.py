@@ -12,6 +12,7 @@ options (모두 선택)
     detail_get      상세 페이지를 GET 으로 열 수 있으면 true (마감일 추출에 사용, 기본 true)
     org_name        기관명 기본값 (작성자 열이 '관리자' 등일 때)
     link_base       상대 링크를 풀 기준 주소 (페이지 주소와 다를 때. <base href> 가 있으면 자동 적용)
+    row_must_contain 이 글자가 있는 행만 (예: 근무지 열이 있는 전국 게시판에서 '울산')
 """
 from __future__ import annotations
 
@@ -256,7 +257,10 @@ def parse_board(html: bytes | str, base_url: str, opts: dict, today: date) -> li
     rows, headers = _pick_rows(soup, opts.get("row_selector"))
     col = _column_index(headers)
     out: list[BoardRow] = []
+    must = opts.get("row_must_contain")
     for tr in rows:
+        if must and must not in tr.get_text():
+            continue
         tds = tr.find_all("td")
         aligned = bool(headers) and len(tds) == len(headers)
         title_td = tds[col["title"]] if aligned and "title" in col else None
@@ -270,7 +274,12 @@ def parse_board(html: bytes | str, base_url: str, opts: dict, today: date) -> li
             values = parse_qs(urlsplit(url).query).get(key_param) if key_param else None
             key, detail_ok = (values[0] if values else url), True
         elif anchor is not None:
-            title = _clean(anchor.get("title") if len(_clean(anchor.get_text())) < 2 else anchor.get_text())
+            title = _clean(anchor.get_text())
+            if len(title) < 2:
+                title = _clean(anchor.get("title"))
+            if len(title) < 2:
+                # <a href="…"/>제목</a> 처럼 링크가 비고 제목은 칸에만 있는 경우 (잡알리오)
+                title = _clean((title_td or anchor.parent).get_text(" "))
             url, key, detail_ok = _resolve_link(soup, anchor, tr, base_url, opts)
         else:
             continue
