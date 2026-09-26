@@ -1,0 +1,40 @@
+# 2단계 후보 게시판 (probe.py --parse --url-file scripts/probe_urls.txt)
+# 구·군청
+https://www.junggu.ulsan.kr/index.ulsan?menuCd=DOM_000000102004002000
+https://eminwon.junggu.ulsan.kr/emwp/jsp/ofr/OfrNotAncmtLSub.jsp?not_ancmt_se_code=05
+https://www.ulsannamgu.go.kr/cop/bbs/selectSaeolHireList.do
+https://www.ulsannamgu.go.kr/cop/bbs/selectBoardList.do?bbsId=hireNotice2
+https://eminwon.ulsannamgu.go.kr/emwp/jsp/ofr/OfrNotAncmtLSub.jsp?not_ancmt_se_code=05
+https://www.donggu.ulsan.kr/donggu/contents/contents.do?mId=4040201
+https://eminwon.donggu.ulsan.kr/emwp/jsp/ofr/OfrNotAncmtLSub.jsp?not_ancmt_se_code=05
+https://eminwon.bukgu.ulsan.kr/emwp/jsp/ofr/OfrNotAncmtLSub.jsp?not_ancmt_se_code=05
+https://www.bukgu.ulsan.kr/
+https://eminwon.ulju.ulsan.kr/emwp/jsp/ofr/OfrNotAncmtLSub.jsp?not_ancmt_se_code=05
+https://www.ulju.ulsan.kr/
+https://www.ulsan.go.kr/u/rep/transfer/testPblanc/list.ulsan?mId=001004008001000000
+# 구·군 시설(도시)관리공단 (동구는 공단 없음)
+https://www.ujcmc.or.kr/bbs/employ/boardList.do
+https://www.uncmc.or.kr/index.ulsan
+https://www.ubimc.or.kr/pageCont.do?menuNo=2040000
+https://www.ubimc.or.kr/
+https://www.uljusiseol.or.kr/
+# 여성·가족
+http://www.w1.or.kr/womenhall/bbs/boardListView.do?classId=NOTICE
+https://www.usw.or.kr/main/mainPage.do
+# 청소년
+https://www.yesulsan.kr/
+https://www.ulsannamgu.go.kr/1388/
+http://www.ulsan1318.net/
+https://www.uljusiseol.or.kr/uljujb/
+# 도서관·평생학습
+https://library.ulsan.go.kr/lib/lib/main.do
+https://www.junggu.ulsan.kr/edu/community/community01.do?bid=BD000015
+https://www.bukgu.ulsan.kr/edu/cop/bbs/selectBoardList.do?bbsId=BBSMSTR_000000000001&menuNo=5010000
+https://www.ulsannamgu.go.kr/edu/main.do
+https://usbl.bukgu.ulsan.kr/main/main.do
+https://library.donggu.ulsan.kr/
+https://uljulib.ulju.ulsan.kr/
+https://www.ulsannamgu.go.kr/library/main.do
+# 기타 시 산하기관
+https://www.ubpi.or.kr/sub/?mcode=0403080000
+https://www.umca.co.kr/umca/contents.do?mId=001001002000000000

@@ -8,6 +8,8 @@ config/sources.yaml 의 각 소스에 실제로 접속해 보고, 게시판 HTML
     python scripts/probe.py                 # 전체 소스 접속 확인 + phase 1 상세 구조
     python scripts/probe.py --detail ID ... # 지정 소스 상세 구조
     python scripts/probe.py --url URL ...   # 임의 URL 상세 구조
+    python scripts/probe.py --parse --url-file scripts/probe_urls.txt
+                                            # 여러 URL 에 실제 게시판 파서를 돌려 결과만 짧게 출력
 """
 from __future__ import annotations
 
@@ -25,7 +27,9 @@ from bs4 import BeautifulSoup
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
+from ulsan_jobs.collectors.board import _pick_rows, parse_board  # noqa: E402
 from ulsan_jobs.http import Http  # noqa: E402
+from ulsan_jobs.models import today_kst  # noqa: E402
 
 HTTP = Http(min_interval=0.5, retries=0, max_seconds=40)
 LINK_PATTERN: re.Pattern | None = None
@@ -166,6 +170,53 @@ def dump_structure(html: bytes, base_url: str) -> None:
             print(f"  text near {kw!r}: {body_text[max(0, i - 60): i + 200]!r}")
 
 
+BOARD_LINK = re.compile(r"공지|채용|모집|강사|알림|소식|notice|board|bbs|Board|Bbs", re.I)
+
+
+def parse_report(label: str, url: str) -> None:
+    """게시판 파서를 그대로 돌려서 몇 건을 어떻게 읽는지만 짧게 보여준다."""
+    print("-" * 100)
+    print(f"PARSE {label}")
+    try:
+        r = fetch(url)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ERROR {type(exc).__name__}: {clip(str(exc), 300)}")
+        return
+    print(f"  status={r.status_code} bytes={len(r.content)} final={r.url}")
+    if len(r.content) < 1500:
+        print(f"  body: {clip(r.content.decode('utf-8', 'replace'), 1500)}")
+        return
+    soup = BeautifulSoup(r.content, "lxml")
+    print(f"  <title>: {clip(soup.title.get_text() if soup.title else '')}")
+    rows = parse_board(r.content, r.url, {}, today_kst())
+    _, headers = _pick_rows(soup, None)
+    print(f"  rows={len(rows)} headers={headers[:10]}")
+    for row in rows[:5]:
+        print(
+            f"    · {clip(row.title, 70)!r} posted={row.posted} deadline={row.deadline} "
+            f"org={row.org!r} label={row.label!r} detail_ok={row.detail_ok}"
+        )
+        print(f"      url={clip(row.url, 220)} key={clip(row.key, 60)!r}")
+    if rows and not rows[0].detail_ok:
+        a = next((tr.find("a") for tr in _pick_rows(soup, None)[0] if tr.find("a")), None)
+        if a is not None:
+            print(f"    first anchor: {describe_anchor(a)}")
+    for form in soup.find_all("form"):
+        hidden = [i.get("name") for i in form.find_all("input", {"type": "hidden"})][:12]
+        if form.get("action") or hidden:
+            print(f"  form id={form.get('id')!r} action={clip(form.get('action'), 100)!r} method={form.get('method')!r} hidden={hidden}")
+    pages = [describe_anchor(a) for a in soup.find_all("a") if re.fullmatch(r"\s*[23]\s*(페이지)?\s*", a.get_text() or "")]
+    for p in pages[:2]:
+        print(f"  page: {p}")
+    if not rows:
+        seen = set()
+        for a in soup.find_all("a", href=True):
+            text = clip(a.get_text(), 40)
+            if BOARD_LINK.search(text + a["href"]) and a["href"] not in seen and len(seen) < 25:
+                seen.add(a["href"])
+                print(f"  link: {describe_anchor(a)}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--detail", nargs="*", default=None, help="상세 구조를 볼 소스 id")
@@ -174,7 +225,19 @@ def main() -> int:
     parser.add_argument("--snippet", nargs="*", default=[], help="이 CSS 셀렉터에 맞는 요소의 HTML 출력")
     parser.add_argument("--around", nargs="*", default=None, help="본문에서 이 단어 주변 글 출력")
     parser.add_argument("--no-reach", action="store_true", help="전체 소스 접속 확인을 건너뜀")
+    parser.add_argument("--parse", action="store_true", help="--url 들에 게시판 파서를 돌려 결과만 짧게 출력")
+    parser.add_argument("--url-file", default=None, help="URL 목록 파일 (한 줄에 하나, # 은 주석)")
     args = parser.parse_args()
+    if args.url_file:
+        for line in (ROOT / args.url_file).read_text(encoding="utf-8").splitlines():
+            line = line.split("#", 1)[0].strip() if not line.lstrip().startswith("http") else line.strip()
+            if line and not line.startswith("#"):
+                args.url.append(line.split()[0])
+    if args.parse:
+        logging.basicConfig(level=logging.WARNING, format="  [%(levelname)s] %(message)s")
+        for url in args.url:
+            parse_report(url, url)
+        return 0
     logging.basicConfig(level=logging.INFO, format="  [%(levelname)s] %(message)s")
     global LINK_PATTERN
     LINK_PATTERN = re.compile(args.links or DEFAULT_LINK_PATTERN)
