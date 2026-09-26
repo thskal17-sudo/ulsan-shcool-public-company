@@ -268,6 +268,35 @@ def parse_report(label: str, url: str) -> None:
                 print(f"  link: {describe_anchor(a)}")
 
 
+def attach_report(url: str, template: str | None) -> None:
+    """상세 페이지의 첨부 공고문을 내려받아 꺼낸 글자 중 접수·기간 관련 줄과 찾은 마감일을 보여준다."""
+    from ulsan_jobs.attachments import extract_text, find_attachments
+    from ulsan_jobs.dates import extract_deadline
+    from ulsan_jobs.detail import page_soup
+
+    print("-" * 100)
+    print(f"ATTACH {url}")
+    try:
+        soup = page_soup(fetch(url).content)
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ERROR {type(exc).__name__}: {clip(str(exc), 300)}")
+        return
+    found = find_attachments(soup, url, template)
+    print(f"  attachments: {[(a.name, clip(a.url, 120)) for a in found]}")
+    for att in found[:2]:
+        try:
+            content = fetch(att.url).content
+        except Exception as exc:  # noqa: BLE001
+            print(f"  {att.name}: ERROR {type(exc).__name__}: {clip(str(exc), 200)}")
+            continue
+        text = extract_text(content)
+        print(f"  {att.name}: {len(content)}B head={content[:8]!r} text={len(text or '')}자 "
+              f"deadline={extract_deadline(text, today_kst(), anywhere=False) if text else None}")
+        for line in (text or "").splitlines():
+            if re.search(r"접\s*수|신\s*청|모\s*집|기\s*간|마\s*감|제\s*출|~", line) and line.strip():
+                print(f"    | {clip(line, 200)}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--detail", nargs="*", default=None, help="상세 구조를 볼 소스 id")
@@ -284,6 +313,8 @@ def main() -> int:
     parser.add_argument("--follow-js", action="store_true", help="--grep 을 같은 사이트의 외부 JS 파일에도 적용")
     parser.add_argument("--browser-ua", action="store_true", help="봇 표시 없는 일반 브라우저 User-Agent 사용")
     parser.add_argument("--legacy-tls", action="store_true", help="--url 호스트에 구형 TLS 허용")
+    parser.add_argument("--attach", action="store_true", help="--url(상세 페이지)의 첨부 공고문을 내려받아 글자와 마감일 확인")
+    parser.add_argument("--attach-template", default=None, help="--attach 에서 쓸 첨부 주소 틀 (sources.yaml 의 attachment_template)")
     args = parser.parse_args()
     global RAW, RAW_FROM, GREP, FOLLOW_JS
     RAW, RAW_FROM = args.raw, args.raw_from
@@ -303,6 +334,10 @@ def main() -> int:
 
         for url in args.url:
             HTTP.allow_legacy_tls(urlsplit(url).hostname or "")
+    if args.attach:
+        for url in args.url:
+            attach_report(url, args.attach_template)
+        return 0
     if args.parse:
         logging.basicConfig(level=logging.WARNING, format="  [%(levelname)s] %(message)s")
         for url in args.url:
