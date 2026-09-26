@@ -26,7 +26,7 @@ from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
 _EXT = re.compile(r"\.(hwpx|hwp|pdf)(?![a-z])", re.I)
-_SKIP = re.compile(r"서식|양식|신청서|원서|동의서|계획서|이력서|자기소개서|확인서|서약서|개인정보")
+_SKIP = re.compile(r"서식|양식|신청서|원서|동의서|계획서|이력서|자기소개서|확인서|서약서|개인정보|공통서류|제출서류")
 _JS_CALL = re.compile(r"([A-Za-z_$][\w$]*)\s*\(([^)]*)\)")
 _URL_IN_JS = re.compile(r"""https?://[^'"\s)]+""")
 DEFAULT_TEMPLATES = {

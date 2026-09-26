@@ -54,3 +54,10 @@ def test_dday_label():
     assert dday_label(TODAY, TODAY) == "D-day"
     assert dday_label(date(2026, 9, 25), TODAY) == "마감"
     assert dday_label(None, TODAY) == "원문확인"
+
+
+def test_deadline_spaced_labels():
+    today = date(2026, 9, 22)
+    text = "1. 모 집 분 야 : 주말수영\n2. 접 수 기 간 : 2026. 9. 21.(월) ~ 9. 25.(금) 18:00\n3. 장 소 : 수련관"
+    assert extract_deadline(text, today, anywhere=False) == date(2026, 9, 25)
+    assert extract_deadline("서류접수기간: 2026.9.28.~10.2.", today, anywhere=False) == date(2026, 10, 2)

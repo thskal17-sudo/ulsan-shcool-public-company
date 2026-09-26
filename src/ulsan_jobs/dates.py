@@ -75,12 +75,18 @@ def find_all_dates(text: str, today: date) -> list[tuple[int, date]]:
     return [(s, d) for s, _, d in found]
 
 
+def _spaced(words: str) -> str:
+    """'접수|기간' → 글자 사이 공백을 허용하는 정규식 ('접 수 기 간' 처럼 띄워 쓴 공고문 대비)."""
+    return "|".join(r"\s*".join(w) for w in words.split("|"))
+
+
 _PERIOD_LABEL = re.compile(
-    r"(접수|모집|신청|제출|공고)\s*(기간|기한|마감|일시|일정)"
-    r"|(원서|서류|응시|지원서?)\s*접수\s*(기간|기한|마감|일시|일정)?"  # 공고문에 흔한 '원서접수 : 9. 21. ~ 9. 25.'
+    rf"({_spaced('접수|모집|신청|제출|공고')})\s*({_spaced('기간|기한|마감|일시|일정')})"
+    # 공고문에 흔한 '원서접수 : 9. 21. ~ 9. 25.'
+    rf"|({_spaced('원서|서류|응시|지원서|지원')})\s*({_spaced('접수')})\s*({_spaced('기간|기한|마감|일시|일정')})?"
 )
 # 기간 표시 뒤의 글은 다음 항목 이름이 나오기 전까지만 본다 ('접수기간 ~ … 사업기간 9. 1. ~ 12. 31.' 방지)
-_NEXT_ITEM = re.compile(r"기간|기한|일시|장소|방법|대상|문의|자격|인원|구분")
+_NEXT_ITEM = re.compile(_spaced("기간|기한|일시|장소|방법|대상|문의|자격|인원|구분"))
 
 
 def extract_deadline(text: str | None, today: date, anywhere: bool = True) -> date | None:
