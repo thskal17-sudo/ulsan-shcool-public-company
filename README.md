@@ -83,6 +83,7 @@ sources.yaml 의 게시판·API ──▶ 수집 ──▶ 강사 공고 판별�
 
 - **강사 공고로 볼 단어·뺄 단어**: `config/keywords.yaml` 의 `include` / `exclude` / `result_notice`
 - **합격자 발표 같은 결과공고도 받기**: `keep_result_notices: true`
+- **분야 분류**: `config/keywords.yaml` 의 `categories` (위에서부터 먼저 맞는 분야, `!단어` 가 있으면 그 분야는 건너뜀)
 - **게시판 추가**: `config/sources.yaml` 에 항목 추가. 구조를 모르면
   **Actions → 사이트 진단 (probe) → Run workflow** 에서 `--no-reach --url <목록 주소>` 로 먼저 확인합니다.
 

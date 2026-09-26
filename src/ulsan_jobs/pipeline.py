@@ -11,6 +11,7 @@ from .classify import categorize, judge
 from .collectors import COLLECTORS, NotConfigured
 from .config import DEFAULT_CONFIG_DIR, Rules, Source, load_rules, load_settings
 from .dates import extract_deadline
+from .detail import extends, full_title, looks_truncated, page_text
 from .http import Http
 from .mailer import MailConfig, build_message, html_body, send, subject_line, text_body
 from .models import Posting, SourceResult, now_kst
@@ -47,7 +48,7 @@ def collect_all(
     store: Store,
     http: Http,
     now: datetime,
-    detail_limit: int = 60,
+    detail_limit: int = 100,
 ) -> list[SourceResult]:
     today = now.date()
     results: list[SourceResult] = []
@@ -83,7 +84,24 @@ def collect_all(
             result.state, result.error = "0건", "목록에서 글을 하나도 읽지 못함 (사이트 구조 변경 의심)"
             continue
 
+        truncated_board = bool(src.options.get("truncated_titles"))
         for p in items:
+            soup, tried = None, False
+            if p.detail_url and (truncated_board or looks_truncated(p.title)):
+                known = store.title_of(p.uid)
+                if known and extends(known, p.title):
+                    p.title = known  # 전에 상세 페이지에서 받아 둔 전체 제목
+                elif (
+                    not known
+                    and judge(p.title, rules, src.keyword_filter, p.label) is not None
+                    and worth_detail(p, today, rules)
+                    and details_fetched < detail_limit
+                ):
+                    details_fetched += 1
+                    soup, tried = _fetch_detail(collector, p), True
+                    if soup is not None:
+                        p.title = full_title(soup, p.title) or p.title
+
             status = judge(p.title, rules, src.keyword_filter, p.label)
             if status is None:
                 continue
@@ -93,16 +111,28 @@ def collect_all(
             if not store.upsert(p, now):
                 continue
             result.new += 1
-            if p.deadline is None and p.detail_url and details_fetched < detail_limit:
-                details_fetched += 1
-                try:
-                    deadline = extract_deadline(collector.fetch_detail_text(p), today, anywhere=False)
-                except Exception as exc:  # noqa: BLE001 - 마감일은 보조 정보라 실패해도 진행
-                    log.info("상세 페이지 실패 %s: %s", p.detail_url, exc)
-                    deadline = None
-                if deadline:
-                    store.set_deadline(p.uid, deadline)
+            if p.deadline is None and p.detail_url and worth_detail(p, today, rules):
+                if not tried and details_fetched < detail_limit:
+                    details_fetched += 1
+                    soup = _fetch_detail(collector, p)
+                if soup is not None:
+                    deadline = extract_deadline(page_text(soup), today, anywhere=False)
+                    if deadline:
+                        store.set_deadline(p.uid, deadline)
     return results
+
+
+def _fetch_detail(collector, p: Posting):
+    try:
+        return collector.fetch_detail(p)
+    except Exception as exc:  # noqa: BLE001 - 상세는 보조 정보라 실패해도 진행
+        log.info("상세 페이지 실패 %s: %s", p.detail_url, exc)
+        return None
+
+
+def worth_detail(p: Posting, today: date, rules: Rules) -> bool:
+    """상세 페이지를 열어 볼 만한가: 너무 오래돼서 어차피 신규로 안 보낼 글은 건너뛴다."""
+    return p.posted_date is None or (today - p.posted_date).days <= rules.new_max_age_days
 
 
 def is_fresh(p: Posting, today: date, rules: Rules) -> bool:

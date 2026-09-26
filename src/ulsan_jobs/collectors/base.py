@@ -22,14 +22,17 @@ class Collector(ABC):
     def collect(self) -> list[Posting]:
         """목록에서 읽은 모든 글 (강사 공고 판별 전)."""
 
-    def fetch_detail_text(self, posting: Posting) -> str | None:
-        """마감일 추출용 상세 본문. 상세를 GET 으로 열 수 없는 소스는 None."""
+    def fetch_detail(self, posting: Posting):
+        """상세 페이지 (script·메뉴 등을 뺀 BeautifulSoup). 상세를 GET 으로 열 수 없는 소스는 None."""
         if not posting.detail_url:
             return None
-        from bs4 import BeautifulSoup
+        from ..detail import page_soup
 
-        resp = self.http.get(posting.detail_url)
-        soup = BeautifulSoup(resp.content, "lxml")
-        for tag in soup(["script", "style", "nav", "header", "footer"]):
-            tag.decompose()
-        return soup.get_text(" ")
+        return page_soup(self.http.get(posting.detail_url).content)
+
+    def fetch_detail_text(self, posting: Posting) -> str | None:
+        """마감일 추출용 상세 본문."""
+        from ..detail import page_text
+
+        soup = self.fetch_detail(posting)
+        return page_text(soup) if soup is not None else None

@@ -62,6 +62,10 @@ class Store:
         self.conn.commit()
         self.conn.close()
 
+    def title_of(self, uid: str) -> str | None:
+        row = self.conn.execute("SELECT title FROM postings WHERE uid = ?", (uid,)).fetchone()
+        return row[0] if row else None
+
     def upsert(self, p: Posting, now: datetime) -> bool:
         """저장하고, 처음 보는 공고면 True."""
         ts = now.isoformat(timespec="seconds")

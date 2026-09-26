@@ -19,6 +19,10 @@ from ulsan_jobs.classify import categorize, infer_district, infer_org_type, judg
         ("공모 안내", False, "", "모집중"),  # 강사 전용 게시판은 키워드 검사 생략
         ("[마감] 울산동천고등학교 시간강사 채용 재공고(미술)", False, "강사", None),
         ("[주의: 접수 마감되었습니다.] 2026학년도 2학기 시간강사 채용 공고(일본어)", False, "강사", None),
+        ("[서부청소년수련관]2026년 청소년방과후아카데 하반기 스포츠강사 최종적격", False, "", None),
+        ("중구수영장 시간강사(프리랜서) 서류적격 대상자 발표 및 면접심사 시행 공고", True, "", None),
+        ("청소년수련활동 인증프로그램 우수기관·지도자 포상 및 수기공모전 참가 안내", True, "", None),
+        ("2026학년도 늘봄학교 프로그램 운영 용역 입찰공고(적격심사)", True, "", "모집중"),
     ],
 )
 def test_judge(rules, title, keyword_filter, label, expected):
@@ -37,6 +41,14 @@ def test_categorize(rules):
     assert categorize("도서관 인문학 강사 모집", "", rules) == "평생교육·문화"
     assert categorize("2026학년도 기간제(시간강사)교원 (화학)채용 공고", "강동고등학교", rules) == "학교 시간강사"
     assert categorize("강사 모집", "", rules) == "기타"
+
+
+def test_categorize_negative_terms(rules):
+    # 공단 수영장의 시간강사는 학교 시간강사가 아니고, 청소년방과후아카데미는 학교 방과후가 아님
+    assert categorize("중구수영장 시간강사(수영) 위촉 공고", "중구도시관리공단", rules) == "체육·수영"
+    assert categorize("2026 청소년방과후아카데미 스포츠강사 (긴급) 위수탁", "울주군시설관리공단", rules) == "체육·수영"
+    assert categorize("울산동천고등학교 시간강사 채용 공고(일본어)", "울산동천고등학교", rules) == "학교 시간강사"
+    assert categorize("여성회관 교육강사(3학기 단기특강) 모집 공고", "울산광역시여성회관", rules) == "평생교육·문화"
 
 
 def test_infer_org_type_and_district():

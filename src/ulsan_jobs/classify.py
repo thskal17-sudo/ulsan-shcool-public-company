@@ -34,9 +34,14 @@ def judge(title: str, rules: Rules, keyword_filter: bool, label: str = "") -> st
 
 
 def categorize(title: str, org_name: str, rules: Rules) -> str:
+    """위에서부터 먼저 맞는 분야. '!' 로 시작하는 단어가 있으면 그 분야는 건너뛴다."""
     text = f"{title} {org_name}"
     for category, terms in rules.categories.items():
-        if _has_any(text, terms):
+        negatives = [t[1:] for t in terms if t.startswith("!")]
+        positives = [t for t in terms if not t.startswith("!")]
+        if _has_any(text, negatives):
+            continue
+        if _has_any(text, positives):
             return category
     return "기타"
 

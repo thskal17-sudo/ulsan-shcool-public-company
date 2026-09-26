@@ -329,6 +329,7 @@ sources:
     verified: true
     options:
       key_param: nttId
+      truncated_titles: true  # 목록 제목이 40자 안팎에서 잘림 → 상세 페이지에서 전체 제목을 받아 판별
       org_name: 울주군시설관리공단
 
   - id: uljusiseol_hire
@@ -344,6 +345,7 @@ sources:
     verified: true
     options:
       key_param: nttId
+      truncated_titles: true  # 목록 제목이 40자 안팎에서 잘림 → 상세 페이지에서 전체 제목을 받아 판별
       org_name: 울주군시설관리공단
 
   - id: uljusiseol_parttime
@@ -359,6 +361,7 @@ sources:
     verified: true
     options:
       key_param: nttId
+      truncated_titles: true  # 목록 제목이 40자 안팎에서 잘림 → 상세 페이지에서 전체 제목을 받아 판별
       org_name: 울주군시설관리공단
 
   - id: namgu_uncmc_home
