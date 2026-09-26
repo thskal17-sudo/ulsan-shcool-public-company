@@ -131,10 +131,8 @@ def _pick_rows(soup: BeautifulSoup, row_selector: str | None) -> tuple[list[Tag]
         table, rows = best, best_rows
     headers: list[str] = []
     if table is not None:
-        head_row = table.find("thead")
-        head_row = head_row.find("tr") if head_row else None
-        if head_row is None:
-            head_row = next((tr for tr in table.find_all("tr") if tr.find("th") and not tr.find("td")), None)
+        # 머리글은 th 만 있는 첫 행 ('전체게시물: n개' 같은 요약 행은 건너뜀)
+        head_row = next((tr for tr in table.find_all("tr") if tr.find("th") and not tr.find("td")), None)
         if head_row is not None:
             headers = [_clean(th.get_text()) for th in head_row.find_all(["th", "td"])]
     return rows, headers
@@ -155,6 +153,17 @@ def _js_args(code: str) -> list[str]:
     if not m:
         return []
     return [a if a else n for a, n in _JS_ARG.findall(m.group(2))]
+
+
+def _pick_key(args: list[str]) -> str:
+    """JS 인자 중 게시글 번호로 보이는 값 (boardView('employ','207','') → '207')."""
+    for a in args:
+        if re.fullmatch(r"\d+", a):
+            return a
+    for a in args:
+        if re.search(r"\d{3,}", a):
+            return a
+    return next((a for a in args if a), "")
 
 
 def _form_url(soup: BeautifulSoup, onclick: str, base_url: str) -> tuple[str, str] | None:
@@ -246,8 +255,8 @@ def _resolve_link(soup, anchor: Tag, tr: Tag, base_url: str, opts: dict) -> tupl
     if template and args:
         try:
             url = template.format(*args)
-            return url, args[0], True
+            return url, _pick_key(args), True
         except (IndexError, KeyError):
             pass
     title = _clean(anchor.get_text())
-    return base_url, (args[0] if args else title), False
+    return base_url, (_pick_key(args) or title), False

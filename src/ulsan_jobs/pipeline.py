@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from .classify import categorize, judge
 from .collectors import COLLECTORS, NotConfigured
@@ -61,6 +62,8 @@ def collect_all(
         if not src.url and not src.collector.endswith("_api"):
             result.state, result.error = "설정필요", "url 없음"
             continue
+        if src.options.get("legacy_tls") and src.url:
+            http.allow_legacy_tls(urlsplit(src.url).hostname or "")
         collector = collector_cls(src, http, today)
         log.info("수집: %s", src.name)
         try:

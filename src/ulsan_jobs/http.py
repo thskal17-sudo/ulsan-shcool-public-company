@@ -4,6 +4,10 @@
 파이썬에서는 인증서 검증에 실패한다. 이 경우 서버 인증서의 AIA(Authority Information
 Access) 항목에서 중간 인증서를 내려받아 신뢰 목록(certifi)에 덧붙인 뒤 다시 검증한다.
 루트 인증서까지의 검증은 그대로 유지되므로 검증을 끄는 것과 달리 안전하다.
+
+또 일부 새올(eminwon) 서버는 오래된 TLS 설정(짧은 DH 키, 구형 암호군)만 지원해서 최신 OpenSSL
+기본값으로는 연결 자체가 안 된다. sources.yaml 에서 legacy_tls: true 로 지정한 호스트에 한해
+암호 강도 하한만 낮춘 연결을 쓴다 (인증서 검증은 그대로).
 """
 from __future__ import annotations
 
@@ -51,12 +55,17 @@ class Http:
             status_forcelist=(429, 500, 502, 503, 504),
             allowed_methods=("GET", "POST"),
         )
+        self._retry = retry
         adapter = HTTPAdapter(max_retries=retry)
         self.session.mount("http://", adapter)
         self.session.mount("https://", adapter)
         self._last_request: dict[str, float] = {}
         self._ca_bundles: dict[str, str] = {}
         self._lock = threading.Lock()
+
+    def allow_legacy_tls(self, host: str) -> None:
+        """이 호스트에만 구형 TLS 설정(짧은 DH 키·구형 암호군·TLS 1.0/1.1)을 허용한다."""
+        self.session.mount(f"https://{host}/", LegacyTLSAdapter(max_retries=self._retry))
 
     def get(self, url: str, **kwargs) -> requests.Response:
         return self.request("GET", url, **kwargs)
@@ -127,6 +136,16 @@ class Http:
         log.info("중간 인증서 %d개 보완: %s", len(pems), host)
         self._ca_bundles[host] = tmp.name
         return tmp.name
+
+
+class LegacyTLSAdapter(HTTPAdapter):
+    def init_poolmanager(self, *args, **kwargs):
+        ctx = ssl.create_default_context(cafile=certifi.where())
+        ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
+        ctx.minimum_version = ssl.TLSVersion.TLSv1
+        ctx.options |= getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0x4)
+        kwargs["ssl_context"] = ctx
+        return super().init_poolmanager(*args, **kwargs)
 
 
 def _is_chain_error(exc: Exception) -> bool:

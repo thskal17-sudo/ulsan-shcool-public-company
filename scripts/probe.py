@@ -35,6 +35,7 @@ HTTP = Http(min_interval=0.5, retries=0, max_seconds=40)
 LINK_PATTERN: re.Pattern | None = None
 SNIPPETS: list[str] = []
 RAW = 0
+RAW_FROM = ""
 AROUND: list[str] = ["접수기간", "모집기간", "신청기간", "마감"]
 
 # 게시판 목록 외에 메뉴 구조(다른 게시판 번호)를 찾기 위해 보는 페이지
@@ -227,8 +228,11 @@ def parse_report(label: str, url: str) -> None:
         for d in js_defs(soup, (a.get("onclick") or "") + (a.get("href") or "")):
             print(f"  page js: {d}")
     if RAW:
-        body = soup.body or soup
-        print(f"  raw: {clip(str(body), RAW)}")
+        html = str(soup.body or soup)
+        start = max(0, html.find(RAW_FROM) - 200) if RAW_FROM and RAW_FROM in html else 0
+        print(f"  raw[{start}:]: {clip(html[start:], RAW)}")
+        srcs = [sc.get("src") for sc in soup.find_all("script") if sc.get("src")]
+        print(f"  script src: {srcs[:15]}")
     if not rows:
         seen = set()
         for a in soup.find_all("a", href=True):
@@ -249,10 +253,12 @@ def main() -> int:
     parser.add_argument("--parse", action="store_true", help="--url 들에 게시판 파서를 돌려 결과만 짧게 출력")
     parser.add_argument("--url-file", default=None, help="URL 목록 파일 (한 줄에 하나, # 은 주석)")
     parser.add_argument("--raw", type=int, default=0, help="--parse 에서 본문 HTML 을 이 글자 수만큼 출력")
+    parser.add_argument("--raw-from", default="", help="--raw 출력을 이 글자가 처음 나오는 곳부터 시작")
     parser.add_argument("--browser-ua", action="store_true", help="봇 표시 없는 일반 브라우저 User-Agent 사용")
+    parser.add_argument("--legacy-tls", action="store_true", help="--url 호스트에 구형 TLS 허용")
     args = parser.parse_args()
-    global RAW
-    RAW = args.raw
+    global RAW, RAW_FROM
+    RAW, RAW_FROM = args.raw, args.raw_from
     if args.browser_ua:
         HTTP.session.headers["User-Agent"] = (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
@@ -262,6 +268,11 @@ def main() -> int:
             line = line.strip()
             if line.startswith("http"):
                 args.url.append(line.split()[0])
+    if args.legacy_tls:
+        from urllib.parse import urlsplit
+
+        for url in args.url:
+            HTTP.allow_legacy_tls(urlsplit(url).hostname or "")
     if args.parse:
         logging.basicConfig(level=logging.WARNING, format="  [%(levelname)s] %(message)s")
         for url in args.url:
