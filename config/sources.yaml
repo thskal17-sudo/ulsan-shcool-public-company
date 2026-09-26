@@ -9,7 +9,7 @@
 # 새 소스를 추가할 때는 먼저 진단 도구로 구조를 확인한다:
 #   GitHub Actions > 사이트 진단 (probe) > Run workflow > args: --no-reach --url <목록 주소>
 
-max_phase: 2
+max_phase: 3
 
 sources:
   # ─────────────────────────────── 국가·공공 (공식 API)
@@ -506,10 +506,15 @@ sources:
     district: 남구
     collector: generic_board
     url: https://www.ulsannamgu.go.kr/edu/board/eduBoard/list.do
+    pages: 1
     keyword_filter: true
-    phase: 2
-    enabled: false  # 진단 때 접속 시간 초과 - 재확인 필요
-    verified: false
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      # 제목 링크는 goBoardArticle('글번호') 로 POST → 상세는 GET 으로도 열림
+      link_template: "https://www.ulsannamgu.go.kr/edu/board/eduBoard/view.do?nttId={0}"
+      org_name: 울산광역시 남구 평생교육과
 
   - id: namgu_library
     name: 남구 구립도서관 - 참여마당(공지)
@@ -517,10 +522,14 @@ sources:
     district: 남구
     collector: generic_board
     url: https://www.ulsannamgu.go.kr/library/board/libNotice/list.do
+    pages: 1
     keyword_filter: true
-    phase: 2
-    enabled: false  # 진단 때 접속 시간 초과 - 재확인 필요
-    verified: false
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: nttId
+      org_name: 울산남구구립도서관
 
   - id: bukgu_library
     name: 북구 구립도서관 - 공지사항
@@ -528,10 +537,14 @@ sources:
     district: 북구
     collector: generic_board
     url: https://usbl.bukgu.ulsan.kr/main/contents.do?a_num=45359874
+    pages: 1
     keyword_filter: true
-    phase: 2
-    enabled: false  # 진단 때 접속 시간 초과 - 재확인 필요
-    verified: false
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: b_num
+      org_name: 울산북구구립도서관
 
   - id: bukgu_lifelong
     name: 북구 평생학습관 - 공지사항
@@ -540,8 +553,8 @@ sources:
     collector: generic_board
     url: https://www.bukgu.ulsan.kr/edu/cop/bbs/selectBoardList.do?bbsId=BBSMSTR_000000000001&menuNo=5010000
     keyword_filter: true
-    phase: 2
-    enabled: false  # 진단 때 접속 시간 초과 - 재확인 필요
+    phase: 3
+    enabled: false  # 목록이 표가 아니라 글마다 POST 폼 + 대부분 수강생 모집 글 → 넣지 않음
     verified: false
 
   # ─────────────────────────────── 시 산하기관
