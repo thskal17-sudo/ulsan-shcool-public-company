@@ -131,6 +131,33 @@ def _deadline_in(text: str, today: date) -> date | None:
     return None
 
 
+def first_period_end(text: str | None, today: date, posted: date | None, max_days: int = 45) -> date | None:
+    """표로 된 공고문처럼 '접수기간' 표시와 날짜가 떨어져 있을 때의 대안: 게시일 무렵 시작해서
+    게시일 뒤 max_days 안에 끝나는 첫 'A ~ B' 기간의 B. (위탁기간·계약기간처럼 먼 기간은 건너뜀)
+
+    공고문 첨부에만 쓴다. 공고문은 보통 공고·접수 기간이 맨 앞에 나온다.
+    """
+    if not text:
+        return None
+    base = posted or today
+    dates = find_all_dates(text, base)
+    for tilde in re.finditer(r"[~∼～〜]", text):
+        # '~' 바로 뒤의 날짜만 ('18:20~20:10' 같은 시간 범위 뒤 다음 줄 날짜는 제외)
+        after = [
+            d for pos, d in dates
+            if 0 < pos - tilde.start() <= 40 and not re.search(r"\d", text[tilde.end(): pos])
+        ]
+        if not after:
+            continue
+        before = [d for pos, d in dates if 0 < tilde.start() - pos <= 30]
+        start, end = (before[-1] if before else None), after[0]
+        if start is not None and not (base - timedelta(days=10) <= start <= end):
+            continue
+        if base <= end <= base + timedelta(days=max_days):
+            return end
+    return None
+
+
 def has_full_date(text: str | None) -> bool:
     """연도가 들어간 날짜가 있는가 (목록에서 게시일 칸을 찾을 때 사용)."""
     return bool(text) and bool(_FULL.search(text) or _SHORT_YEAR.search(text))

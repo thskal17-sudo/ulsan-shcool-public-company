@@ -2,7 +2,7 @@ from datetime import date
 
 import pytest
 
-from ulsan_jobs.dates import dday_label, extract_deadline, parse_date
+from ulsan_jobs.dates import dday_label, extract_deadline, first_period_end, parse_date
 
 TODAY = date(2026, 9, 26)
 
@@ -61,3 +61,14 @@ def test_deadline_spaced_labels():
     text = "1. 모 집 분 야 : 주말수영\n2. 접 수 기 간 : 2026. 9. 21.(월) ~ 9. 25.(금) 18:00\n3. 장 소 : 수련관"
     assert extract_deadline(text, today, anywhere=False) == date(2026, 9, 25)
     assert extract_deadline("서류접수기간: 2026.9.28.~10.2.", today, anywhere=False) == date(2026, 10, 2)
+
+
+def test_first_period_end_for_table_notices():
+    # 울주군시설관리공단 공고문(표): 날짜가 '접수기간' 칸과 떨어져 있다
+    text = (
+        "위·수탁 모집 공고(안)\n18:20~20:10\n2026. 9. 18.(금) ~ 9. 20.(일)\n-온라인접수 강사채용시스템\n"
+        "2026. 9. 23.(수) ~ 9. 30.(수)\n4. 위탁기간 : 2026. 10. 2.(금) ~ 2026. 12. 11.(금) / 3개월"
+    )
+    assert first_period_end(text, date(2026, 9, 27), date(2026, 9, 18)) == date(2026, 9, 20)
+    # 게시일 무렵에 시작하는 기간이 없으면 (위탁기간만 있으면) 모른다
+    assert first_period_end("위탁기간 : 2026. 10. 2. ~ 2026. 12. 11.", date(2026, 9, 27), date(2026, 8, 1)) is None

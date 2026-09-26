@@ -11,7 +11,7 @@ from .attachments import extract_text, find_attachments
 from .classify import categorize, judge
 from .collectors import COLLECTORS, NotConfigured
 from .config import DEFAULT_CONFIG_DIR, Rules, Source, load_rules, load_settings
-from .dates import extract_deadline
+from .dates import extract_deadline, first_period_end
 from .detail import extends, full_title, looks_truncated, page_text
 from .http import Http
 from .matching import finished_by
@@ -175,7 +175,7 @@ def _deadline_from_attachment(collector, soup, p: Posting, today: date) -> date 
     except Exception as exc:  # noqa: BLE001 - 첨부는 보조 정보라 실패해도 진행
         log.info("첨부 내려받기 실패 %s: %s", att.url, exc)
         return None
-    deadline = extract_deadline(text, today, anywhere=False) if text else None
+    deadline = (extract_deadline(text, today, anywhere=False) or first_period_end(text, today, p.posted_date)) if text else None
     log.info("첨부 %s → %s", att.name, deadline or ("글자 없음" if not text else "마감일 못 찾음"))
     return deadline
 
