@@ -29,6 +29,8 @@ from ulsan_jobs.http import Http  # noqa: E402
 
 HTTP = Http(min_interval=0.5, retries=0, max_seconds=40)
 LINK_PATTERN: re.Pattern | None = None
+SNIPPETS: list[str] = []
+AROUND: list[str] = ["접수기간", "모집기간", "신청기간", "마감"]
 
 # 게시판 목록 외에 메뉴 구조(다른 게시판 번호)를 찾기 위해 보는 페이지
 EXTRA_URLS = [
@@ -153,11 +155,15 @@ def dump_structure(html: bytes, base_url: str) -> None:
                 if len(seen) >= 60:
                     break
 
-    body_text = clip(soup.get_text(" "), 100000)
-    for kw in ("접수기간", "모집기간", "신청기간", "마감"):
+    for selector in SNIPPETS:
+        for el in soup.select(selector)[:2]:
+            print(f"  snippet {selector!r}: {clip(str(el), 1500)}")
+
+    body_text = clip(soup.get_text(" "), 200000)
+    for kw in AROUND:
         i = body_text.find(kw)
         if i >= 0:
-            print(f"  text near {kw!r}: {body_text[max(0, i - 40): i + 120]!r}")
+            print(f"  text near {kw!r}: {body_text[max(0, i - 60): i + 200]!r}")
 
 
 def main() -> int:
@@ -165,10 +171,16 @@ def main() -> int:
     parser.add_argument("--detail", nargs="*", default=None, help="상세 구조를 볼 소스 id")
     parser.add_argument("--url", nargs="*", default=[], help="상세 구조를 볼 임의 URL")
     parser.add_argument("--links", default=None, help="이 정규식에 맞는 링크를 모두 출력")
+    parser.add_argument("--snippet", nargs="*", default=[], help="이 CSS 셀렉터에 맞는 요소의 HTML 출력")
+    parser.add_argument("--around", nargs="*", default=None, help="본문에서 이 단어 주변 글 출력")
+    parser.add_argument("--no-reach", action="store_true", help="전체 소스 접속 확인을 건너뜀")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="  [%(levelname)s] %(message)s")
     global LINK_PATTERN
     LINK_PATTERN = re.compile(args.links or DEFAULT_LINK_PATTERN)
+    SNIPPETS.extend(args.snippet)
+    if args.around is not None:
+        AROUND[:] = args.around
 
     sources = yaml.safe_load((ROOT / "config" / "sources.yaml").read_text(encoding="utf-8"))["sources"]
     detail_ids = set(args.detail) if args.detail is not None else {s["id"] for s in sources if s.get("phase") == 1}
@@ -177,7 +189,7 @@ def main() -> int:
     print("REACHABILITY")
     print("=" * 100)
     detail_targets: list[tuple[str, str]] = []
-    for s in sources:
+    for s in [] if args.no_reach else sources:
         url = s.get("url")
         if not url or s.get("collector", "").endswith("_api"):
             print(f"- {s['id']:<22} SKIP (url 없음 또는 API)")
@@ -191,7 +203,7 @@ def main() -> int:
             print(f"- {s['id']:<22} ERROR {type(exc).__name__}: {clip(str(exc), 400)}")
 
     targets = detail_targets + [(u, u) for u in (args.url or [])]
-    if args.detail is None and not args.url:
+    if args.detail is None and not args.url and not args.no_reach:
         targets += [(u, u) for u in EXTRA_URLS]
 
     for label, url in targets:

@@ -24,7 +24,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install requests beautifulsoup4 lxml pyyaml cryptography certifi
-      - run: python scripts/probe.py $PROBE_ARGS
+      # set -f: URL 의 ? 등이 파일 이름으로 확장되지 않게 함
+      - run: set -f; python scripts/probe.py $PROBE_ARGS
         env:
           PYTHONUNBUFFERED: "1"
           PROBE_ARGS: ${{ github.event.inputs.args }}
