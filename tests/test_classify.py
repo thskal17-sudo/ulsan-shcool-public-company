@@ -17,6 +17,8 @@ from ulsan_jobs.classify import categorize, infer_district, infer_org_type, judg
         ("수영강사 채용 최종합격자 공고", True, "", None),
         ("방과후 강사 서류전형 결과 안내", True, "", None),
         ("공모 안내", False, "", "모집중"),  # 강사 전용 게시판은 키워드 검사 생략
+        ("[마감] 울산동천고등학교 시간강사 채용 재공고(미술)", False, "강사", None),
+        ("[주의: 접수 마감되었습니다.] 2026학년도 2학기 시간강사 채용 공고(일본어)", False, "강사", None),
     ],
 )
 def test_judge(rules, title, keyword_filter, label, expected):
@@ -29,9 +31,11 @@ def test_keep_result_notices(rules):
 
 
 def test_categorize(rules):
-    assert categorize("독서논술 강사 모집", "척과초등학교", rules) == "방과후·늘봄"
+    assert categorize("척과초 초등방과후 프로그램 개인위탁 독서논술 강사 모집", "척과초등학교", rules) == "방과후·늘봄"
+    assert categorize("독서논술 강사 모집", "척과초등학교", rules) == "학교 기타"
     assert categorize("수영장 교육강사 모집", "울산시설공단", rules) == "체육·수영"
     assert categorize("도서관 인문학 강사 모집", "", rules) == "평생교육·문화"
+    assert categorize("2026학년도 기간제(시간강사)교원 (화학)채용 공고", "강동고등학교", rules) == "학교 시간강사"
     assert categorize("강사 모집", "", rules) == "기타"
 
 

@@ -61,8 +61,8 @@ sources:
     org_type: 교육청·학교
     district: 울산전체
     collector: use_cms
-    url: https://use.go.kr/job/user/bbs/BD_selectBbsList.do?q_bbsSn=2249
-    pages: 3
+    url: https://use.go.kr/job/user/bbs/BD_selectBbsList.do?q_bbsSn=2249&q_rowPerPage=10&q_currPage=1  # q_rowPerPage 가 없으면 2쪽부터 빈 화면
+    pages: 3  # 하루 10건 안팎이 올라와서 매일 3쪽(약 3일치)을 본다
     keyword_filter: true  # 기간제교원·조리사 등도 올라오는 게시판이라 강사 공고만 거름 ('구분' 열도 함께 봄)
     phase: 1
     enabled: true
@@ -90,7 +90,7 @@ sources:
     org_type: 교육청·학교
     district: 울산전체
     collector: use_cms
-    url: https://use.go.kr/after/user/bbs/BD_selectBbsList.do?q_bbsSn=2168
+    url: https://use.go.kr/after/user/bbs/BD_selectBbsList.do?q_bbsSn=2168&q_rowPerPage=10&q_currPage=1
     pages: 1
     keyword_filter: true
     phase: 1
