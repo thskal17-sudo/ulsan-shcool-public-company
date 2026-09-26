@@ -23,6 +23,7 @@ from ulsan_jobs.classify import categorize, infer_district, infer_org_type, judg
         ("중구수영장 시간강사(프리랜서) 서류적격 대상자 발표 및 면접심사 시행 공고", True, "", None),
         ("청소년수련활동 인증프로그램 우수기관·지도자 포상 및 수기공모전 참가 안내", True, "", None),
         ("2026학년도 늘봄학교 프로그램 운영 용역 입찰공고(적격심사)", True, "", "모집중"),
+        ("[중부청소년수련관]2026년 문화강좌 4분기 교육강사 긴급 위·수탁 모집 최종수탁자 공고(안)", False, "", None),
     ],
 )
 def test_judge(rules, title, keyword_filter, label, expected):

@@ -28,6 +28,20 @@ def test_full_title_from_detail_page():
     assert full_title(soup, "[서부청소년수련관] 2026 청소년방과후아카데미 스포츠강사 (긴급) 위수탁 모집 공고") is None
 
 
+def test_full_title_mixed_with_post_info():
+    # 제목이 작성자·작성일과 한 칸에 섞여 있어도 제목만 꺼낸다
+    html = """<div class="view_tit">[남부청소년수련관] 2026년 주말수영 강사(긴급) 위·수탁 모집 공고
+      <ul><li>작성자 관리자</li><li>작성일 2026-09-16</li><li>조회수 133</li></ul></div>"""
+    soup = page_soup(html.encode())
+    assert full_title(soup, "[남부청소년수련관] 2026년 주말수영 강사(긴급) 위·수") == (
+        "[남부청소년수련관] 2026년 주말수영 강사(긴급) 위·수탁 모집 공고"
+    )
+    one_line = "<p>[남부청소년수련관] 2026년 주말수영 강사(긴급) 위·수탁 모집 공고 작성자 관리자 작성일 2026-09-16 조회수 133</p>"
+    assert full_title(page_soup(one_line.encode()), "[남부청소년수련관] 2026년 주말수영 강사(긴급) 위·수") == (
+        "[남부청소년수련관] 2026년 주말수영 강사(긴급) 위·수탁 모집 공고"
+    )
+
+
 def test_truncation_helpers():
     assert looks_truncated("서류적격 대상자 발표 및 면접심사 시행 공...")
     assert looks_truncated("기간제 근로자 재채용 공…")

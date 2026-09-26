@@ -38,18 +38,27 @@ def page_text(soup: BeautifulSoup) -> str:
     return soup.get_text(" ")
 
 
+# 제목과 같은 칸에 붙어 나오는 글 정보 (예: '… 모집 공고 작성자 관리자 작성일 2026-09-16 조회수 133')
+_META_TAIL = re.compile(r"\s+(작성자|작성일|등록일|게시일|조회수?|첨부(파일)?|글쓴이|담당부서)\s*[:：]?\s.*$")
+
+
 def full_title(soup: BeautifulSoup, short: str, max_len: int = 200) -> str | None:
     """상세 페이지에서 목록 제목(short)으로 시작하는 가장 짧은 글 덩어리 = 전체 제목."""
     prefix = _squash(_ELLIPSIS.sub("", short or ""))
     if len(prefix) < 6:
         return None
+    candidates = [el.get_text(" ") for el in soup.find_all(_TITLE_TAGS)]
+    candidates += [str(s) for s in soup.find_all(string=True)]  # 제목이 다른 요소와 한 칸에 섞인 경우
     best: str | None = None
-    for el in soup.find_all(_TITLE_TAGS):
-        text = re.sub(r"\s+", " ", el.get_text(" ")).strip()
-        if len(text) > max_len:
+    for raw in candidates:
+        text = re.sub(r"\s+", " ", raw).strip()
+        if len(text) > max_len * 2:
             continue
+        cut = _META_TAIL.sub("", text)
+        if _squash(cut).startswith(prefix):
+            text = cut
         squashed = _squash(text)
-        if squashed.startswith(prefix) and len(squashed) > len(prefix):
+        if len(text) <= max_len and squashed.startswith(prefix) and len(squashed) > len(prefix):
             if best is None or len(text) < len(best):
                 best = text
     return best
