@@ -1,0 +1,28 @@
+name: 사이트 진단 (probe)
+
+on:
+  workflow_dispatch:
+    inputs:
+      args:
+        description: "probe.py 인자 (예: --detail uic_notice / --url https://...)"
+        required: false
+        default: ""
+  push:
+    paths:
+      - "scripts/probe.py"
+      - ".github/workflows/probe.yml"
+      - "config/sources.yaml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests beautifulsoup4 lxml pyyaml
+      - run: python scripts/probe.py $PROBE_ARGS
+        env:
+          PROBE_ARGS: ${{ github.event.inputs.args }}

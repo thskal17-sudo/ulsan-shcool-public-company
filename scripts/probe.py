@@ -1,0 +1,186 @@
+"""수집 대상 사이트 진단 도구.
+
+config/sources.yaml 의 각 소스에 실제로 접속해 보고, 게시판 HTML 구조(표 머리글,
+행별 링크/onclick, 폼, 페이지 이동 링크)를 요약 출력한다. 새 소스를 추가하거나
+사이트 개편으로 수집이 깨졌을 때 GitHub Actions 로그로 구조를 확인하는 용도.
+
+사용법:
+    python scripts/probe.py                 # 전체 소스 접속 확인 + phase 1 상세 구조
+    python scripts/probe.py --detail ID ... # 지정 소스 상세 구조
+    python scripts/probe.py --url URL ...   # 임의 URL 상세 구조
+"""
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from pathlib import Path
+
+import requests
+import yaml
+from bs4 import BeautifulSoup
+
+ROOT = Path(__file__).resolve().parent.parent
+UA = "Mozilla/5.0 (compatible; ulsan-instructor-jobs-probe/0.1)"
+
+# 게시판 목록 외에 메뉴 구조(다른 게시판 번호)를 찾기 위해 보는 페이지
+EXTRA_URLS = [
+    "https://use.go.kr/job/index.do",
+    "https://use.go.kr/after/index.do",
+]
+
+
+def clip(text: str | None, n: int = 120) -> str:
+    text = re.sub(r"\s+", " ", text or "").strip()
+    return text if len(text) <= n else text[: n - 1] + "…"
+
+
+def fetch(url: str) -> requests.Response:
+    return requests.get(url, headers={"User-Agent": UA}, timeout=30)
+
+
+def describe_anchor(a) -> str:
+    parts = [f"text={clip(a.get_text(), 70)!r}"]
+    if a.get("href"):
+        parts.append(f"href={clip(a['href'], 160)!r}")
+    if a.get("onclick"):
+        parts.append(f"onclick={clip(a['onclick'], 160)!r}")
+    for attr in ("data-id", "data-seq", "data-no", "data-idx", "target", "title"):
+        if a.get(attr):
+            parts.append(f"{attr}={clip(a[attr], 60)!r}")
+    return " ".join(parts)
+
+
+def dump_structure(html: bytes, base_url: str) -> None:
+    soup = BeautifulSoup(html, "lxml")
+    print(f"  <title>: {clip(soup.title.get_text() if soup.title else '')}")
+
+    tables = soup.find_all("table")
+    print(f"  tables: {len(tables)}")
+    for ti, table in enumerate(tables):
+        rows = table.find_all("tr")
+        if len(rows) < 2:
+            continue
+        cls = " ".join(table.get("class", []))
+        print(f"  [table {ti}] class={cls!r} summary={clip(table.get('summary'), 80)!r} rows={len(rows)}")
+        headers = [clip(th.get_text(), 20) for th in table.find_all("th")][:12]
+        print(f"    th: {headers}")
+        shown = 0
+        for tr in rows:
+            tds = tr.find_all("td")
+            if not tds:
+                continue
+            cells = [clip(td.get_text(), 40) for td in tds]
+            print(f"    row class={' '.join(tr.get('class', []))!r} cells={cells}")
+            print(f"      td classes={[' '.join(td.get('class', [])) for td in tds]}")
+            for a in tr.find_all("a"):
+                print(f"      a: {describe_anchor(a)}")
+            if tr.get("onclick"):
+                print(f"      tr onclick={clip(tr['onclick'], 160)!r}")
+            shown += 1
+            if shown >= 4:
+                break
+
+    if not tables:
+        # 표가 없는 목록형(ul/li, div) 게시판
+        print("  no tables; list-like anchors:")
+        for ul in soup.find_all(["ul", "ol"]):
+            anchors = ul.find_all("a")
+            if len(anchors) >= 5 and len(ul.find_all("li")) >= 5:
+                print(f"  [list] class={' '.join(ul.get('class', []))!r} parent={ul.parent.name}.{' '.join(ul.parent.get('class', []))}")
+                for li in ul.find_all("li")[:4]:
+                    print(f"    li text={clip(li.get_text(' '), 150)!r}")
+                    for a in li.find_all("a")[:2]:
+                        print(f"      a: {describe_anchor(a)}")
+
+    print("  forms:")
+    for form in soup.find_all("form"):
+        hidden = [
+            f"{i.get('name')}={clip(i.get('value'), 30)}"
+            for i in form.find_all("input", {"type": "hidden"})
+        ][:15]
+        print(
+            f"    form id={form.get('id')!r} name={form.get('name')!r} "
+            f"action={form.get('action')!r} method={form.get('method')!r} hidden={hidden}"
+        )
+
+    print("  paging anchors:")
+    for a in soup.find_all("a"):
+        if re.fullmatch(r"\s*[2-4]\s*", a.get_text() or ""):
+            print(f"    {describe_anchor(a)}")
+
+    # onclick 에서 쓰이는 JS 함수 정의 (상세보기 URL 조립 방식 확인용)
+    used = set()
+    for tag in soup.find_all(onclick=True):
+        m = re.match(r"\s*(?:javascript:)?\s*([A-Za-z_$][\w$.]*)\s*\(", tag["onclick"])
+        if m:
+            used.add(m.group(1).split(".")[-1])
+    for a in soup.find_all("a", href=True):
+        m = re.match(r"\s*javascript:\s*([A-Za-z_$][\w$.]*)\s*\(", a["href"])
+        if m:
+            used.add(m.group(1).split(".")[-1])
+    scripts = "\n".join(s.get_text() for s in soup.find_all("script") if not s.get("src"))
+    for name in sorted(used):
+        m = re.search(r"function\s+" + re.escape(name) + r"\s*\([^)]*\)\s*\{", scripts)
+        if m:
+            body = scripts[m.start(): m.start() + 600]
+            print(f"  js {name}: {clip(body, 600)}")
+        else:
+            print(f"  js {name}: (inline definition not found)")
+
+    print("  nav anchors with board ids:")
+    seen = set()
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if re.search(r"bbsSn|bbsId|boardId|classId|menuNo|mId=", href) and href not in seen:
+            seen.add(href)
+            print(f"    {describe_anchor(a)}")
+            if len(seen) >= 40:
+                break
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--detail", nargs="*", default=None, help="상세 구조를 볼 소스 id")
+    parser.add_argument("--url", nargs="*", default=[], help="상세 구조를 볼 임의 URL")
+    args = parser.parse_args()
+
+    sources = yaml.safe_load((ROOT / "config" / "sources.yaml").read_text(encoding="utf-8"))["sources"]
+    detail_ids = set(args.detail) if args.detail is not None else {s["id"] for s in sources if s.get("phase") == 1}
+
+    print("=" * 100)
+    print("REACHABILITY")
+    print("=" * 100)
+    detail_targets: list[tuple[str, str]] = []
+    for s in sources:
+        url = s.get("url")
+        if not url or s.get("collector", "").endswith("_api"):
+            print(f"- {s['id']:<22} SKIP (url 없음 또는 API)")
+            continue
+        try:
+            r = fetch(url)
+            print(f"- {s['id']:<22} {r.status_code} {len(r.content):>8}B final={r.url}")
+            if s["id"] in detail_ids:
+                detail_targets.append((s["id"], url))
+        except Exception as exc:  # noqa: BLE001 - 진단 도구라 모든 오류를 보고
+            print(f"- {s['id']:<22} ERROR {type(exc).__name__}: {clip(str(exc), 150)}")
+
+    targets = detail_targets + [(u, u) for u in (args.url or [])]
+    if args.detail is None and not args.url:
+        targets += [(u, u) for u in EXTRA_URLS]
+
+    for label, url in targets:
+        print("=" * 100)
+        print(f"DETAIL {label}  {url}")
+        print("=" * 100)
+        try:
+            r = fetch(url)
+            print(f"  status={r.status_code} final={r.url} content-type={r.headers.get('content-type')}")
+            dump_structure(r.content, r.url)
+        except Exception as exc:  # noqa: BLE001
+            print(f"  ERROR {type(exc).__name__}: {clip(str(exc), 200)}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
