@@ -34,6 +34,7 @@ from ulsan_jobs.models import today_kst  # noqa: E402
 HTTP = Http(min_interval=0.5, retries=0, max_seconds=40)
 LINK_PATTERN: re.Pattern | None = None
 SNIPPETS: list[str] = []
+RAW = 0
 AROUND: list[str] = ["접수기간", "모집기간", "신청기간", "마감"]
 
 # 게시판 목록 외에 메뉴 구조(다른 게시판 번호)를 찾기 위해 보는 페이지
@@ -170,6 +171,17 @@ def dump_structure(html: bytes, base_url: str) -> None:
             print(f"  text near {kw!r}: {body_text[max(0, i - 60): i + 200]!r}")
 
 
+def js_defs(soup, code: str) -> list[str]:
+    """onclick/href 의 javascript 호출에 쓰인 함수 정의를 찾아 돌려준다."""
+    out = []
+    scripts = "\n".join(sc.get_text() for sc in soup.find_all("script") if not sc.get("src"))
+    for name in dict.fromkeys(re.findall(r"([A-Za-z_$][\w$]*)\s*\(", code or "")):
+        m = re.search(r"function\s+" + re.escape(name) + r"\s*\([^)]*\)\s*\{", scripts)
+        if m:
+            out.append(clip(scripts[m.start(): m.start() + 500], 500))
+    return out
+
+
 BOARD_LINK = re.compile(r"공지|채용|모집|강사|알림|소식|notice|board|bbs|Board|Bbs", re.I)
 
 
@@ -201,6 +213,8 @@ def parse_report(label: str, url: str) -> None:
         a = next((tr.find("a") for tr in _pick_rows(soup, None)[0] if tr.find("a")), None)
         if a is not None:
             print(f"    first anchor: {describe_anchor(a)}")
+            for d in js_defs(soup, (a.get("onclick") or "") + (a.get("href") or "")):
+                print(f"    js: {d}")
     for form in soup.find_all("form"):
         hidden = [i.get("name") for i in form.find_all("input", {"type": "hidden"})][:12]
         if form.get("action") or hidden:
@@ -208,6 +222,13 @@ def parse_report(label: str, url: str) -> None:
     pages = [describe_anchor(a) for a in soup.find_all("a") if re.fullmatch(r"\s*[23]\s*(페이지)?\s*", a.get_text() or "")]
     for p in pages[:2]:
         print(f"  page: {p}")
+    if pages:
+        a = next(a for a in soup.find_all("a") if re.fullmatch(r"\s*2\s*(페이지)?\s*", a.get_text() or ""))
+        for d in js_defs(soup, (a.get("onclick") or "") + (a.get("href") or "")):
+            print(f"  page js: {d}")
+    if RAW:
+        body = soup.body or soup
+        print(f"  raw: {clip(str(body), RAW)}")
     if not rows:
         seen = set()
         for a in soup.find_all("a", href=True):
@@ -227,11 +248,19 @@ def main() -> int:
     parser.add_argument("--no-reach", action="store_true", help="전체 소스 접속 확인을 건너뜀")
     parser.add_argument("--parse", action="store_true", help="--url 들에 게시판 파서를 돌려 결과만 짧게 출력")
     parser.add_argument("--url-file", default=None, help="URL 목록 파일 (한 줄에 하나, # 은 주석)")
+    parser.add_argument("--raw", type=int, default=0, help="--parse 에서 본문 HTML 을 이 글자 수만큼 출력")
+    parser.add_argument("--browser-ua", action="store_true", help="봇 표시 없는 일반 브라우저 User-Agent 사용")
     args = parser.parse_args()
+    global RAW
+    RAW = args.raw
+    if args.browser_ua:
+        HTTP.session.headers["User-Agent"] = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+        )
     if args.url_file:
         for line in (ROOT / args.url_file).read_text(encoding="utf-8").splitlines():
-            line = line.split("#", 1)[0].strip() if not line.lstrip().startswith("http") else line.strip()
-            if line and not line.startswith("#"):
+            line = line.strip()
+            if line.startswith("http"):
                 args.url.append(line.split()[0])
     if args.parse:
         logging.basicConfig(level=logging.WARNING, format="  [%(levelname)s] %(message)s")
