@@ -21,13 +21,21 @@ import yaml
 from bs4 import BeautifulSoup
 
 ROOT = Path(__file__).resolve().parent.parent
-UA = "Mozilla/5.0 (compatible; ulsan-instructor-jobs-probe/0.1)"
+sys.path.insert(0, str(ROOT / "src"))
+
+from ulsan_jobs.http import Http  # noqa: E402
+
+HTTP = Http(min_interval=0.5)
+LINK_PATTERN: re.Pattern | None = None
 
 # 게시판 목록 외에 메뉴 구조(다른 게시판 번호)를 찾기 위해 보는 페이지
 EXTRA_URLS = [
     "https://use.go.kr/job/index.do",
     "https://use.go.kr/after/index.do",
+    # 울산시설공단 상세보기를 GET 으로 열 수 있는지 확인
+    "https://www.uic.or.kr/uimc/notify/noti06/selectEmploymentArticle.do?bbsId=BBSMSTR_000000000022&recruitGb=RT01&employmentId=EMPLOY_0000000003134",
 ]
+DEFAULT_LINK_PATTERN = r"bbsSn|noti0\d|usPrivateApply|BD_select|recruitGb"
 
 
 def clip(text: str | None, n: int = 120) -> str:
@@ -36,7 +44,10 @@ def clip(text: str | None, n: int = 120) -> str:
 
 
 def fetch(url: str) -> requests.Response:
-    return requests.get(url, headers={"User-Agent": UA}, timeout=30)
+    try:
+        return HTTP.get(url)
+    except requests.HTTPError as exc:  # 진단 목적이라 4xx/5xx 응답도 그대로 보여준다
+        return exc.response
 
 
 def describe_anchor(a) -> str:
@@ -128,22 +139,32 @@ def dump_structure(html: bytes, base_url: str) -> None:
         else:
             print(f"  js {name}: (inline definition not found)")
 
-    print("  nav anchors with board ids:")
-    seen = set()
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        if re.search(r"bbsSn|bbsId|boardId|classId|menuNo|mId=", href) and href not in seen:
-            seen.add(href)
-            print(f"    {describe_anchor(a)}")
-            if len(seen) >= 40:
-                break
+    if LINK_PATTERN is not None:
+        print(f"  anchors matching {LINK_PATTERN.pattern!r}:")
+        seen = set()
+        for a in soup.find_all("a"):
+            key = (a.get("href") or "") + "|" + (a.get("onclick") or "")
+            if LINK_PATTERN.search(key) and key not in seen:
+                seen.add(key)
+                print(f"    {describe_anchor(a)}")
+                if len(seen) >= 60:
+                    break
+
+    body_text = clip(soup.get_text(" "), 100000)
+    for kw in ("접수기간", "모집기간", "신청기간", "마감"):
+        i = body_text.find(kw)
+        if i >= 0:
+            print(f"  text near {kw!r}: {body_text[max(0, i - 40): i + 120]!r}")
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--detail", nargs="*", default=None, help="상세 구조를 볼 소스 id")
     parser.add_argument("--url", nargs="*", default=[], help="상세 구조를 볼 임의 URL")
+    parser.add_argument("--links", default=None, help="이 정규식에 맞는 링크를 모두 출력")
     args = parser.parse_args()
+    global LINK_PATTERN
+    LINK_PATTERN = re.compile(args.links or DEFAULT_LINK_PATTERN)
 
     sources = yaml.safe_load((ROOT / "config" / "sources.yaml").read_text(encoding="utf-8"))["sources"]
     detail_ids = set(args.detail) if args.detail is not None else {s["id"] for s in sources if s.get("phase") == 1}
@@ -163,7 +184,7 @@ def main() -> int:
             if s["id"] in detail_ids:
                 detail_targets.append((s["id"], url))
         except Exception as exc:  # noqa: BLE001 - 진단 도구라 모든 오류를 보고
-            print(f"- {s['id']:<22} ERROR {type(exc).__name__}: {clip(str(exc), 150)}")
+            print(f"- {s['id']:<22} ERROR {type(exc).__name__}: {clip(str(exc), 400)}")
 
     targets = detail_targets + [(u, u) for u in (args.url or [])]
     if args.detail is None and not args.url:
@@ -178,7 +199,7 @@ def main() -> int:
             print(f"  status={r.status_code} final={r.url} content-type={r.headers.get('content-type')}")
             dump_structure(r.content, r.url)
         except Exception as exc:  # noqa: BLE001
-            print(f"  ERROR {type(exc).__name__}: {clip(str(exc), 200)}")
+            print(f"  ERROR {type(exc).__name__}: {clip(str(exc), 400)}")
     return 0
 
 

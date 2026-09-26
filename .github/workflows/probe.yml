@@ -10,6 +10,7 @@ on:
   push:
     paths:
       - "scripts/probe.py"
+      - "src/ulsan_jobs/http.py"
       - ".github/workflows/probe.yml"
       - "config/sources.yaml"
 
@@ -22,7 +23,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install requests beautifulsoup4 lxml pyyaml
+      - run: pip install requests beautifulsoup4 lxml pyyaml cryptography certifi
       - run: python scripts/probe.py $PROBE_ARGS
         env:
           PROBE_ARGS: ${{ github.event.inputs.args }}

@@ -1,0 +1,159 @@
+"""HTTP 클라이언트: 재시도, 사이트별 요청 간격, 불완전한 인증서 체인 보완.
+
+일부 공공기관 서버는 중간 인증서(intermediate CA)를 보내지 않아 브라우저에서는 열리지만
+파이썬에서는 인증서 검증에 실패한다. 이 경우 서버 인증서의 AIA(Authority Information
+Access) 항목에서 중간 인증서를 내려받아 신뢰 목록(certifi)에 덧붙인 뒤 다시 검증한다.
+루트 인증서까지의 검증은 그대로 유지되므로 검증을 끄는 것과 달리 안전하다.
+"""
+from __future__ import annotations
+
+import logging
+import socket
+import ssl
+import tempfile
+import threading
+import time
+from pathlib import Path
+from urllib.parse import urlsplit
+
+import certifi
+import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
+log = logging.getLogger(__name__)
+
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/128.0 Safari/537.36 UlsanInstructorJobs/1.0 "
+    "(+https://github.com/thskal17-sudo/ulsan-shcool-public-company)"
+)
+
+
+class Http:
+    def __init__(self, min_interval: float = 1.0, timeout: float = 30.0):
+        self.min_interval = min_interval
+        self.timeout = timeout
+        self.session = requests.Session()
+        self.session.headers.update({"User-Agent": USER_AGENT, "Accept-Language": "ko-KR,ko;q=0.9"})
+        retry = Retry(
+            total=3,
+            backoff_factor=1.5,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=("GET", "POST"),
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
+        self._last_request: dict[str, float] = {}
+        self._ca_bundles: dict[str, str] = {}
+        self._lock = threading.Lock()
+
+    def get(self, url: str, **kwargs) -> requests.Response:
+        return self.request("GET", url, **kwargs)
+
+    def post(self, url: str, **kwargs) -> requests.Response:
+        return self.request("POST", url, **kwargs)
+
+    def request(self, method: str, url: str, **kwargs) -> requests.Response:
+        host = urlsplit(url).hostname or ""
+        self._wait_turn(host)
+        kwargs.setdefault("timeout", self.timeout)
+        if host in self._ca_bundles:
+            kwargs.setdefault("verify", self._ca_bundles[host])
+        try:
+            resp = self.session.request(method, url, **kwargs)
+        except requests.exceptions.SSLError as exc:
+            if host in self._ca_bundles or "verify" in kwargs or not _is_chain_error(exc):
+                raise
+            bundle = self._bundle_with_intermediates(host, urlsplit(url).port or 443)
+            if not bundle:
+                raise
+            kwargs["verify"] = bundle
+            resp = self.session.request(method, url, **kwargs)
+        resp.raise_for_status()
+        return resp
+
+    def _wait_turn(self, host: str) -> None:
+        with self._lock:
+            last = self._last_request.get(host)
+            now = time.monotonic()
+            if last is not None and now - last < self.min_interval:
+                time.sleep(self.min_interval - (now - last))
+            self._last_request[host] = time.monotonic()
+
+    def _bundle_with_intermediates(self, host: str, port: int) -> str | None:
+        try:
+            pems = fetch_intermediate_pems(host, port, self.session)
+        except Exception as exc:  # noqa: BLE001 - 보완 실패 시 원래 SSL 오류를 그대로 올린다
+            log.warning("중간 인증서 보완 실패 %s: %s", host, exc)
+            return None
+        if not pems:
+            return None
+        base = Path(certifi.where()).read_text(encoding="ascii")
+        tmp = tempfile.NamedTemporaryFile("w", suffix=".pem", prefix=f"ca-{host}-", delete=False, encoding="ascii")
+        with tmp:
+            tmp.write(base)
+            tmp.write("\n")
+            tmp.write("\n".join(pems))
+        log.info("중간 인증서 %d개 보완: %s", len(pems), host)
+        self._ca_bundles[host] = tmp.name
+        return tmp.name
+
+
+def _is_chain_error(exc: Exception) -> bool:
+    text = str(exc)
+    return "CERTIFICATE_VERIFY_FAILED" in text and (
+        "unable to get local issuer certificate" in text
+        or "unable to verify the first certificate" in text
+    )
+
+
+def fetch_intermediate_pems(host: str, port: int, session: requests.Session) -> list[str]:
+    """서버 인증서의 AIA 'CA Issuers' 주소를 따라가며 중간 인증서를 PEM 목록으로 받는다."""
+    from cryptography import x509
+    from cryptography.hazmat.primitives.serialization import Encoding, pkcs7
+    from cryptography.x509.oid import AuthorityInformationAccessOID, ExtensionOID
+
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    with socket.create_connection((host, port), timeout=15) as sock:
+        with ctx.wrap_socket(sock, server_hostname=host) as tls:
+            der = tls.getpeercert(binary_form=True)
+    cert = x509.load_der_x509_certificate(der)
+
+    pems: list[str] = []
+    for _ in range(4):
+        try:
+            aia = cert.extensions.get_extension_for_oid(ExtensionOID.AUTHORITY_INFORMATION_ACCESS).value
+        except x509.ExtensionNotFound:
+            break
+        urls = [d.access_location.value for d in aia if d.access_method == AuthorityInformationAccessOID.CA_ISSUERS]
+        if not urls:
+            break
+        data = session.get(urls[0], timeout=15).content
+        issuer = _load_any_cert(data, x509, pkcs7)
+        if issuer is None:
+            break
+        pems.append(issuer.public_bytes(Encoding.PEM).decode("ascii"))
+        if issuer.issuer == issuer.subject:
+            break
+        cert = issuer
+    return pems
+
+
+def _load_any_cert(data: bytes, x509, pkcs7):
+    for loader in (x509.load_der_x509_certificate, x509.load_pem_x509_certificate):
+        try:
+            return loader(data)
+        except ValueError:
+            pass
+    for loader in (pkcs7.load_der_pkcs7_certificates, pkcs7.load_pem_pkcs7_certificates):
+        try:
+            certs = loader(data)
+            if certs:
+                return certs[0]
+        except ValueError:
+            pass
+    return None
