@@ -430,7 +430,7 @@ GitHub Actions 러너(미국 서부)에서 `scripts/probe.py` 로 각 사이트�
 | 사이트 | 방법 |
 |---|---|
 | 나라일터 | 기관명 검색(`searchSelectninsttnm=울산`)이 GET 으로 됨. 상세는 `fn_apmView(구분, 번호)` → `apmView.do?empmnsn=번호`. 2쪽은 POST 전용이라 매일 1쪽 |
-| 잡알리오 | 목록이 검색 폼(_csrf 토큰) POST 로만 나옴 → `form_board` 수집기(폼 숨은 값 복사 후 POST). 제목 링크가 `<a …/>` 로 비어 있어 제목은 칸에서 읽음. 근무지 '울산' 행만 |
+| 잡알리오 | 목록이 검색 폼(_csrf 토큰) POST 로만 나옴 → `form_board` 수집기(폼 숨은 값 복사 후 POST). 제목 링크가 `<a …/>` 로 비어 있어 제목은 칸에서 읽음. 근무지 조건(R3016)은 서버가 적용 (여러 지역 공고는 근무지가 '서울 외 6' 처럼 나옴) |
 | 남구 평생학습 | 제목 링크 `goBoardArticle(번호)` → 상세는 GET 으로도 열림 (`link_template` 이 번호 없는 href 보다 우선) |
 | 남구·북구 구립도서관 | 재확인 결과 정상 응답 |
 
