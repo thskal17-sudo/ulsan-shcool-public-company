@@ -1,0 +1,288 @@
+# 울산 강사 구인공고 수집 대상 목록 (초안)
+#
+# - verified: Phase 0에서 실제 접속·파싱을 확인하면 true로 바꾼다.
+# - enabled: false 인 항목은 수집하지 않는다 (주소 미확인·추가 조사 필요).
+# - keyword_filter: 강사 전용 게시판이면 false (모든 글을 수집), 일반 공지 게시판이면 true.
+# - phase: 구현 우선순위 (1 = MVP).
+#
+# 주소는 설계 시점(2026-09) 웹 검색으로 확인한 값이며, 실제 목록 URL·셀렉터는 구현 시 검증한다.
+
+sources:
+  # ─────────────────────────────── 국가·공공 (공식 API)
+  - id: work24_api
+    name: 고용24(워크넷) 채용정보 Open API
+    org_type: 국가·공공기관
+    district: 울산전체
+    collector: work24_api
+    url: https://www.work24.go.kr/cm/e/a/0110/selectOpenApiIntro.do
+    params:
+      region: ["31110", "31140", "31170", "31200", "31710"]  # 중구·남구·동구·북구·울주군
+      keyword: 강사
+    auth_env: WORK24_API_KEY
+    keyword_filter: true
+    phase: 1
+    enabled: true
+    verified: false
+
+  - id: alio_api
+    name: 잡알리오 공공기관 채용정보 API
+    org_type: 국가·공공기관
+    district: 울산전체
+    collector: alio_api
+    url: https://www.data.go.kr/data/15125273/openapi.do
+    params:
+      work_region: 울산
+    auth_env: DATA_GO_KR_KEY
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: false
+
+  - id: gojobs_api
+    name: 나라일터 공공취업정보 API
+    org_type: 국가·공공기관
+    district: 울산전체
+    collector: gojobs_api
+    url: https://www.data.go.kr/data/15000485/openapi.do
+    params:
+      work_region: 울산
+    auth_env: DATA_GO_KR_KEY
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: false
+
+  # ─────────────────────────────── 교육청·학교
+  - id: use_job_general
+    name: 울산교육청 인력풀 - 일반채용공고
+    org_type: 교육청·학교
+    district: 울산전체
+    collector: use_cms
+    url: https://use.go.kr/job/user/bbs/BD_selectBbsList.do?q_bbsSn=2249
+    pages: 3
+    keyword_filter: true
+    phase: 1
+    enabled: true
+    verified: false
+
+  - id: use_after_company
+    name: 방과후·늘봄지원센터 - 채용공고(업체위탁)
+    org_type: 교육청·학교
+    district: 울산전체
+    collector: use_cms
+    url: https://use.go.kr/after/user/bbs/BD_selectBbsList.do?q_bbsSn=2168
+    pages: 2
+    keyword_filter: false
+    phase: 1
+    enabled: true
+    verified: false
+
+  - id: afschool_private
+    name: 울산방과후학교 온라인지원시스템 - 개인위탁 강사모집
+    org_type: 교육청·학교
+    district: 울산전체
+    collector: afschool
+    url: https://afschool.use.go.kr/usPrivateApply
+    pages: 3
+    keyword_filter: false
+    phase: 1
+    enabled: true
+    verified: false
+
+  # ─────────────────────────────── 지자체 (시청·구군청)
+  - id: ulsan_city_exam
+    name: 울산시청 시험공고
+    org_type: 지자체
+    district: 울산전체
+    collector: generic_board
+    url: https://www.ulsan.go.kr/u/rep/transfer/testPblanc/list.ulsan?mId=001004008001000000
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: false
+
+  - id: namgu_eminwon
+    name: 남구청 채용공고(새올)
+    org_type: 지자체
+    district: 남구
+    collector: eminwon
+    url: https://eminwon.ulsannamgu.go.kr/emwp/jsp/ofr/OfrNotAncmtLSub.jsp?not_ancmt_se_code=05
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: false
+
+  - id: bukgu_eminwon
+    name: 북구청 채용공고(새올)
+    org_type: 지자체
+    district: 북구
+    collector: eminwon
+    url: https://eminwon.bukgu.ulsan.kr/emwp/jsp/ofr/OfrNotAncmtLSub.jsp?not_ancmt_se_code=05
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: false
+
+  - id: junggu_eminwon
+    name: 중구청 채용공고(새올)
+    org_type: 지자체
+    district: 중구
+    collector: eminwon
+    url: null  # TODO: 주소 확인
+    keyword_filter: true
+    phase: 2
+    enabled: false
+    verified: false
+
+  - id: donggu_eminwon
+    name: 동구청 채용공고(새올)
+    org_type: 지자체
+    district: 동구
+    collector: eminwon
+    url: null  # TODO: 주소 확인
+    keyword_filter: true
+    phase: 2
+    enabled: false
+    verified: false
+
+  - id: ulju_eminwon
+    name: 울주군청 채용공고(새올)
+    org_type: 지자체
+    district: 울주군
+    collector: eminwon
+    url: null  # TODO: 주소 확인
+    keyword_filter: true
+    phase: 2
+    enabled: false
+    verified: false
+
+  - id: namgu_affiliated
+    name: 남구청 산하기관 채용정보
+    org_type: 지자체
+    district: 남구
+    collector: generic_board
+    url: https://www.ulsannamgu.go.kr/cop/bbs/selectBoardList.do?bbsId=hireNotice2
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: false
+
+  # ─────────────────────────────── 공단 (체육시설)
+  - id: uic_notice
+    name: 울산시설공단 채용알림(채용/강습위탁)
+    org_type: 공단(체육시설)
+    district: 울산전체
+    collector: generic_board
+    url: https://www.uic.or.kr/notify/noti06.do
+    keyword_filter: true
+    phase: 1
+    enabled: true
+    verified: false
+
+  - id: uic_recruit
+    name: 울산시설공단 채용 홈페이지
+    org_type: 공단(체육시설)
+    district: 울산전체
+    collector: generic_board
+    url: https://uic.or.kr/recruit/notify/notify02.do
+    keyword_filter: true
+    phase: 1
+    enabled: true
+    verified: false
+
+  - id: namgu_uncmc
+    name: 울산남구도시관리공단 채용
+    org_type: 공단(체육시설)
+    district: 남구
+    collector: incruit
+    url: https://uncmc.incruit.com/
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: false
+
+  - id: ulju_siseol
+    name: 울주군시설관리공단 채용
+    org_type: 공단(체육시설)
+    district: 울주군
+    collector: incruit
+    url: https://uljusiseol.incruit.com/
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: false
+
+  # TODO: 중구·동구·북구 시설(도시)관리공단 채용 게시판 조사
+
+  # ─────────────────────────────── 여성·가족
+  - id: womenhall
+    name: 울산광역시 여성회관(중부 여성새로일하기센터)
+    org_type: 여성·가족
+    district: 중구
+    collector: generic_board
+    url: http://www.w1.or.kr/womenhall/bbs/boardListView.do?classId=NOTICE
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: false
+
+  - id: usw
+    name: 울산여성인력개발센터(울산 여성새로일하기센터)
+    org_type: 여성·가족
+    district: 울산전체
+    collector: generic_board
+    url: https://www.usw.or.kr/  # TODO: 공지사항 목록 URL 확인
+    keyword_filter: true
+    phase: 2
+    enabled: false
+    verified: false
+
+  - id: usfcc
+    name: 울산가족문화센터
+    org_type: 여성·가족
+    district: 울산전체
+    collector: generic_board
+    url: https://culture.usfcc.or.kr/  # TODO: 공지/채용 목록 URL 확인
+    keyword_filter: true
+    phase: 2
+    enabled: false
+    verified: false
+
+  # TODO: 동구·북구 여성회관, 북구 여성새로일하기센터
+
+  # ─────────────────────────────── 청소년·평생교육·도서관·문화
+  - id: yesulsan
+    name: 울산광역시 청소년활동진흥센터
+    org_type: 청소년
+    district: 울산전체
+    collector: generic_board
+    url: https://www.yesulsan.kr/  # TODO: 공지 목록 URL 확인 (notify/notice_view.jsp 상세 확인됨)
+    keyword_filter: true
+    phase: 2
+    enabled: false
+    verified: false
+
+  - id: junggu_library
+    name: 울산중구도서관 교육강사
+    org_type: 평생교육·도서관
+    district: 중구
+    collector: generic_board
+    url: https://lib.junggu.ulsan.kr/lib/contents.do?mId=001005006001000000
+    keyword_filter: false
+    phase: 2
+    enabled: true
+    verified: false
+
+  - id: bukgu_lifelong
+    name: 북구 평생학습관 공지
+    org_type: 평생교육·도서관
+    district: 북구
+    collector: generic_board
+    url: https://www.bukgu.ulsan.kr/edu/  # TODO: BBSMSTR_000000000001 목록 URL 확인
+    keyword_filter: true
+    phase: 2
+    enabled: false
+    verified: false
+
+  # TODO: 울산문화관광재단, 구·군 청소년수련관/청소년문화의집, 울산도서관·구립도서관,
+  #       울산 평생교육진흥원, 중구·남구·동구·울주군 평생학습관, 종합사회복지관
