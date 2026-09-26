@@ -50,76 +50,85 @@ def collect_all(
     now: datetime,
     detail_limit: int = 100,
 ) -> list[SourceResult]:
-    today = now.date()
-    results: list[SourceResult] = []
-    details_fetched = 0
-    for src in sources:
-        result = SourceResult(src.id, src.name, src.org_type, src.url or "")
-        results.append(result)
-        collector_cls = COLLECTORS.get(src.collector)
-        if collector_cls is None:
-            result.state, result.error = "미구현", f"수집기 '{src.collector}' 는 다음 단계에서 구현 예정"
-            continue
-        if not src.url and not src.collector.endswith("_api"):
-            result.state, result.error = "설정필요", "url 없음"
-            continue
-        if src.options.get("legacy_tls") and src.url:
-            http.allow_legacy_tls(urlsplit(src.url).hostname or "")
-        collector = collector_cls(src, http, today)
-        log.info("수집: %s", src.name)
-        try:
-            items = collector.collect()
-        except NotConfigured as exc:
-            result.state, result.error = "설정필요", str(exc)
-            continue
-        except Exception as exc:  # noqa: BLE001 - 한 소스 실패가 전체를 멈추지 않게 한다
-            log.warning("수집 실패 %s: %s", src.id, exc)
-            log.debug("상세", exc_info=True)
-            result.state, result.error = "오류", f"{type(exc).__name__}: {exc}"[:300]
-            continue
-
-        result.fetched = len(items)
-        result.samples = [p.title for p in items[:3]]
-        if not items:
-            result.state, result.error = "0건", "목록에서 글을 하나도 읽지 못함 (사이트 구조 변경 의심)"
-            continue
-
-        truncated_board = bool(src.options.get("truncated_titles"))
-        for p in items:
-            soup, tried = None, False
-            if p.detail_url and (truncated_board or looks_truncated(p.title)):
-                known = store.title_of(p.uid)
-                if known and extends(known, p.title):
-                    p.title = known  # 전에 상세 페이지에서 받아 둔 전체 제목
-                elif (
-                    not known
-                    and judge(p.title, rules, src.keyword_filter, p.label) is not None
-                    and worth_detail(p, today, rules)
-                    and details_fetched < detail_limit
-                ):
-                    details_fetched += 1
-                    soup, tried = _fetch_detail(collector, p), True
-                    if soup is not None:
-                        p.title = full_title(soup, p.title) or p.title
-
-            status = judge(p.title, rules, src.keyword_filter, p.label)
-            if status is None:
-                continue
-            p.status = status
-            p.category = categorize(f"{p.title} {p.label}", p.org_name, rules)
-            result.matched += 1
-            if not store.upsert(p, now):
-                continue
-            result.new += 1
-            if p.deadline is None and p.detail_url and worth_detail(p, today, rules):
-                if not tried and details_fetched < detail_limit:
-                    details_fetched += 1
-                    soup = _fetch_detail(collector, p)
-                if soup is not None:
-                    deadline = extract_deadline(page_text(soup), today, anywhere=False)
-                    if deadline:
-                        store.set_deadline(p.uid, deadline)
+    """모든 소스를 수집한다. 실패(오류·0건)한 소스는 끝에서 한 번 더 시도한다 (관공서 서버의 일시 장애 대비)."""
+    budget = {"details": detail_limit}
+    results = [_collect_source(src, rules, store, http, now, budget) for src in sources]
+    for i, src in enumerate(sources):
+        if results[i].state in ("오류", "0건"):
+            log.info("다시 시도: %s (%s)", src.name, results[i].error)
+            results[i] = _collect_source(src, rules, store, http, now, budget)
     return results
+
+
+def _collect_source(
+    src: Source, rules: Rules, store: Store, http: Http, now: datetime, budget: dict[str, int]
+) -> SourceResult:
+    today = now.date()
+    result = SourceResult(src.id, src.name, src.org_type, src.url or "")
+    collector_cls = COLLECTORS.get(src.collector)
+    if collector_cls is None:
+        result.state, result.error = "미구현", f"수집기 '{src.collector}' 는 다음 단계에서 구현 예정"
+        return result
+    if not src.url and not src.collector.endswith("_api"):
+        result.state, result.error = "설정필요", "url 없음"
+        return result
+    if src.options.get("legacy_tls") and src.url:
+        http.allow_legacy_tls(urlsplit(src.url).hostname or "")
+    collector = collector_cls(src, http, today)
+    log.info("수집: %s", src.name)
+    try:
+        items = collector.collect()
+    except NotConfigured as exc:
+        result.state, result.error = "설정필요", str(exc)
+        return result
+    except Exception as exc:  # noqa: BLE001 - 한 소스 실패가 전체를 멈추지 않게 한다
+        log.warning("수집 실패 %s: %s", src.id, exc)
+        log.debug("상세", exc_info=True)
+        result.state, result.error = "오류", f"{type(exc).__name__}: {exc}"[:300]
+        return result
+
+    result.fetched = len(items)
+    result.samples = [p.title for p in items[:3]]
+    if not items:
+        result.state, result.error = "0건", "목록에서 글을 하나도 읽지 못함 (사이트 구조 변경 의심)"
+        return result
+
+    truncated_board = bool(src.options.get("truncated_titles"))
+    for p in items:
+        soup, tried = None, False
+        if p.detail_url and (truncated_board or looks_truncated(p.title)):
+            known = store.title_of(p.uid)
+            if known and extends(known, p.title):
+                p.title = known  # 전에 상세 페이지에서 받아 둔 전체 제목
+            elif (
+                not known
+                and judge(p.title, rules, src.keyword_filter, p.label) is not None
+                and worth_detail(p, today, rules)
+                and budget["details"] > 0
+            ):
+                budget["details"] -= 1
+                soup, tried = _fetch_detail(collector, p), True
+                if soup is not None:
+                    p.title = full_title(soup, p.title) or p.title
+
+        status = judge(p.title, rules, src.keyword_filter, p.label)
+        if status is None:
+            continue
+        p.status = status
+        p.category = categorize(f"{p.title} {p.label}", p.org_name, rules)
+        result.matched += 1
+        if not store.upsert(p, now):
+            continue
+        result.new += 1
+        if p.deadline is None and p.detail_url and worth_detail(p, today, rules):
+            if not tried and budget["details"] > 0:
+                budget["details"] -= 1
+                soup = _fetch_detail(collector, p)
+            if soup is not None:
+                deadline = extract_deadline(page_text(soup), today, anywhere=False)
+                if deadline:
+                    store.set_deadline(p.uid, deadline)
+    return result
 
 
 def _fetch_detail(collector, p: Posting):

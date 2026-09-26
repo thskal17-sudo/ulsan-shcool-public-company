@@ -130,3 +130,25 @@ def test_missing_mail_settings_fail_loudly(env, monkeypatch):
     monkeypatch.delenv("SMTP_APP_PASSWORD")
     with pytest.raises(RuntimeError, match="SMTP_APP_PASSWORD"):
         run(tmp_path, config, send_mail=True)
+
+
+class FlakyCollector(Collector):
+    calls = 0
+
+    def collect(self):
+        FlakyCollector.calls += 1
+        if FlakyCollector.calls == 1:
+            raise ConnectionError("일시 장애")
+        return [Posting(**{**p.__dict__}) for p in POSTS]
+
+
+def test_failed_source_is_retried_once(env, monkeypatch):
+    # 관공서 서버의 일시 장애: 처음 실패한 소스는 끝에서 한 번 더 시도한다
+    tmp_path, config, _ = env
+    FlakyCollector.calls = 0
+    monkeypatch.setitem(COLLECTORS, "fake", FlakyCollector)
+    outcome = run(tmp_path, config, send_mail=False)
+    states = {r.source_id: r.state for r in outcome.results}
+    assert states == {"fake": "정상", "broken": "오류"}
+    assert FlakyCollector.calls == 2
+    assert len(outcome.new) == 2
