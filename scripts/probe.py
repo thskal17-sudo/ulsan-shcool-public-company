@@ -36,6 +36,8 @@ LINK_PATTERN: re.Pattern | None = None
 SNIPPETS: list[str] = []
 RAW = 0
 RAW_FROM = ""
+GREP: re.Pattern | None = None
+FOLLOW_JS = False
 AROUND: list[str] = ["접수기간", "모집기간", "신청기간", "마감"]
 
 # 게시판 목록 외에 메뉴 구조(다른 게시판 번호)를 찾기 위해 보는 페이지
@@ -186,6 +188,14 @@ def js_defs(soup, code: str) -> list[str]:
 BOARD_LINK = re.compile(r"공지|채용|모집|강사|알림|소식|notice|board|bbs|Board|Bbs", re.I)
 
 
+def grep_report(label: str, text: str, limit: int = 8) -> None:
+    hits = list(GREP.finditer(text))
+    if hits:
+        print(f"  grep {label}: {len(hits)} hits")
+    for m in hits[:limit]:
+        print(f"    … {clip(text[max(0, m.start() - 150): m.end() + 350], 500)}")
+
+
 def parse_report(label: str, url: str) -> None:
     """게시판 파서를 그대로 돌려서 몇 건을 어떻게 읽는지만 짧게 보여준다."""
     print("-" * 100)
@@ -227,6 +237,22 @@ def parse_report(label: str, url: str) -> None:
         a = next(a for a in soup.find_all("a") if re.fullmatch(r"\s*2\s*(페이지)?\s*", a.get_text() or ""))
         for d in js_defs(soup, (a.get("onclick") or "") + (a.get("href") or "")):
             print(f"  page js: {d}")
+    if GREP is not None:
+        grep_report("page", r.content.decode("utf-8", "replace"))
+        if FOLLOW_JS:
+            from urllib.parse import urljoin, urlsplit
+
+            host = urlsplit(r.url).hostname
+            for sc in soup.find_all("script", src=True):
+                js_url = urljoin(r.url, sc["src"])
+                if urlsplit(js_url).hostname != host:
+                    continue
+                try:
+                    js = HTTP.get(js_url).content.decode("utf-8", "replace")
+                except Exception as exc:  # noqa: BLE001
+                    print(f"  js {js_url}: {type(exc).__name__}")
+                    continue
+                grep_report(js_url, js)
     if RAW:
         html = str(soup.body or soup)
         start = max(0, html.find(RAW_FROM) - 200) if RAW_FROM and RAW_FROM in html else 0
@@ -254,11 +280,15 @@ def main() -> int:
     parser.add_argument("--url-file", default=None, help="URL 목록 파일 (한 줄에 하나, # 은 주석)")
     parser.add_argument("--raw", type=int, default=0, help="--parse 에서 본문 HTML 을 이 글자 수만큼 출력")
     parser.add_argument("--raw-from", default="", help="--raw 출력을 이 글자가 처음 나오는 곳부터 시작")
+    parser.add_argument("--grep", default=None, help="--parse 에서 HTML 에 이 정규식이 나오는 곳을 출력")
+    parser.add_argument("--follow-js", action="store_true", help="--grep 을 같은 사이트의 외부 JS 파일에도 적용")
     parser.add_argument("--browser-ua", action="store_true", help="봇 표시 없는 일반 브라우저 User-Agent 사용")
     parser.add_argument("--legacy-tls", action="store_true", help="--url 호스트에 구형 TLS 허용")
     args = parser.parse_args()
-    global RAW, RAW_FROM
+    global RAW, RAW_FROM, GREP, FOLLOW_JS
     RAW, RAW_FROM = args.raw, args.raw_from
+    GREP = re.compile(args.grep) if args.grep else None
+    FOLLOW_JS = args.follow_js
     if args.browser_ua:
         HTTP.session.headers["User-Agent"] = (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
