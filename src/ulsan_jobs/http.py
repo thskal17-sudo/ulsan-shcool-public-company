@@ -31,13 +31,22 @@ USER_AGENT = (
 
 
 class Http:
-    def __init__(self, min_interval: float = 1.0, timeout: float = 30.0):
+    def __init__(
+        self,
+        min_interval: float = 1.0,
+        timeout: float = 20.0,
+        retries: int = 2,
+        max_seconds: float = 60.0,
+        max_bytes: int = 10_000_000,
+    ):
         self.min_interval = min_interval
         self.timeout = timeout
+        self.max_seconds = max_seconds  # 응답 하나를 받는 데 쓰는 최대 시간 (느리게 흘려보내는 서버 대비)
+        self.max_bytes = max_bytes
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": USER_AGENT, "Accept-Language": "ko-KR,ko;q=0.9"})
         retry = Retry(
-            total=3,
+            total=retries,
             backoff_factor=1.5,
             status_forcelist=(429, 500, 502, 503, 504),
             allowed_methods=("GET", "POST"),
@@ -58,7 +67,8 @@ class Http:
     def request(self, method: str, url: str, **kwargs) -> requests.Response:
         host = urlsplit(url).hostname or ""
         self._wait_turn(host)
-        kwargs.setdefault("timeout", self.timeout)
+        kwargs.setdefault("timeout", (10, self.timeout))
+        kwargs["stream"] = True
         if host in self._ca_bundles:
             kwargs.setdefault("verify", self._ca_bundles[host])
         try:
@@ -71,8 +81,26 @@ class Http:
                 raise
             kwargs["verify"] = bundle
             resp = self.session.request(method, url, **kwargs)
+        self._read_body(resp)
         resp.raise_for_status()
         return resp
+
+    def _read_body(self, resp: requests.Response) -> None:
+        """본문을 시간·크기 제한 안에서 읽는다 (requests 의 timeout 은 바이트 사이 간격만 본다)."""
+        started = time.monotonic()
+        chunks: list[bytes] = []
+        size = 0
+        try:
+            for chunk in resp.iter_content(chunk_size=65536):
+                chunks.append(chunk)
+                size += len(chunk)
+                if size > self.max_bytes:
+                    raise requests.exceptions.ContentDecodingError(f"응답이 너무 큼 (>{self.max_bytes}B): {resp.url}")
+                if time.monotonic() - started > self.max_seconds:
+                    raise requests.exceptions.Timeout(f"응답 수신이 {self.max_seconds:.0f}초를 넘음: {resp.url}")
+        finally:
+            resp.close()
+        resp._content = b"".join(chunks)  # noqa: SLF001 - stream 으로 읽은 본문을 일반 응답처럼 쓰기 위함
 
     def _wait_turn(self, host: str) -> None:
         with self._lock:
@@ -132,7 +160,7 @@ def fetch_intermediate_pems(host: str, port: int, session: requests.Session) -> 
         urls = [d.access_location.value for d in aia if d.access_method == AuthorityInformationAccessOID.CA_ISSUERS]
         if not urls:
             break
-        data = session.get(urls[0], timeout=15).content
+        data = session.get(urls[0], timeout=(10, 15)).content
         issuer = _load_any_cert(data, x509, pkcs7)
         if issuer is None:
             break

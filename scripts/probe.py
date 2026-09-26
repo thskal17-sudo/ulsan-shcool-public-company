@@ -12,6 +12,8 @@ config/sources.yaml 의 각 소스에 실제로 접속해 보고, 게시판 HTML
 from __future__ import annotations
 
 import argparse
+import logging
+import time
 import re
 import sys
 from pathlib import Path
@@ -25,7 +27,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from ulsan_jobs.http import Http  # noqa: E402
 
-HTTP = Http(min_interval=0.5)
+HTTP = Http(min_interval=0.5, retries=0, max_seconds=40)
 LINK_PATTERN: re.Pattern | None = None
 
 # 게시판 목록 외에 메뉴 구조(다른 게시판 번호)를 찾기 위해 보는 페이지
@@ -44,6 +46,7 @@ def clip(text: str | None, n: int = 120) -> str:
 
 
 def fetch(url: str) -> requests.Response:
+    print(f"  … {time.strftime('%H:%M:%S')} GET {url}", flush=True)
     try:
         return HTTP.get(url)
     except requests.HTTPError as exc:  # 진단 목적이라 4xx/5xx 응답도 그대로 보여준다
@@ -163,6 +166,7 @@ def main() -> int:
     parser.add_argument("--url", nargs="*", default=[], help="상세 구조를 볼 임의 URL")
     parser.add_argument("--links", default=None, help="이 정규식에 맞는 링크를 모두 출력")
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="  [%(levelname)s] %(message)s")
     global LINK_PATTERN
     LINK_PATTERN = re.compile(args.links or DEFAULT_LINK_PATTERN)
 
