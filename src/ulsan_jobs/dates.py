@@ -76,19 +76,26 @@ def find_all_dates(text: str, today: date) -> list[tuple[int, date]]:
 
 
 _PERIOD_LABEL = re.compile(r"(접수|모집|신청|제출|공고)\s*(기간|기한|마감|일시|일정)")
+# 기간 표시 뒤의 글은 다음 항목 이름이 나오기 전까지만 본다 ('접수기간 ~ … 사업기간 9. 1. ~ 12. 31.' 방지)
+_NEXT_ITEM = re.compile(r"기간|기한|일시|장소|방법|대상|문의|자격|인원|구분")
 
 
-def extract_deadline(text: str | None, today: date) -> date | None:
+def extract_deadline(text: str | None, today: date, anywhere: bool = True) -> date | None:
     """본문·제목에서 접수 마감일을 찾는다.
 
-    1순위: '접수기간/모집기간 …' 뒤 200자 안의 '~' 다음 날짜 (없으면 '까지' 앞 날짜)
-    2순위: 문서 어디든 '~ 날짜' 또는 '날짜 까지'
+    1순위: '접수기간/모집기간 …' 바로 뒤(다음 항목 이름 전까지)의 '~' 다음 날짜, 없으면 '까지' 앞 날짜
+    2순위(anywhere=True): 글 전체에서 '~ 날짜' 또는 '날짜 까지'.
+        제목·목록 칸처럼 짧은 글에만 쓴다. 상세 페이지 전체에 쓰면 엉뚱한 날짜를 잡는다.
     """
     if not text:
         return None
     text = re.sub(r"\s+", " ", text)
-    windows = [text[m.end(): m.end() + 200] for m in _PERIOD_LABEL.finditer(text)]
-    for window in windows + [text]:
+    windows = []
+    for m in _PERIOD_LABEL.finditer(text):
+        window = text[m.end(): m.end() + 200]
+        cut = _NEXT_ITEM.search(window, 1)
+        windows.append(window[: cut.start()] if cut else window)
+    for window in windows + ([text] if anywhere else []):
         d = _deadline_in(window, today)
         if d:
             return d
@@ -101,18 +108,23 @@ def _deadline_in(text: str, today: date) -> date | None:
         return None
     tilde = re.search(r"[~∼～〜]", text)
     if tilde:
-        after = [d for pos, d in dates if pos > tilde.start()]
+        after = [d for pos, d in dates if 0 < pos - tilde.start() <= 40]
         if after:
             return after[0]
-        before = [d for pos, d in dates if pos < tilde.start()]
+        before = [d for pos, d in dates if 0 < tilde.start() - pos <= 40]
         if before:
             return before[-1]  # '9. 26. 09:00 ~ 18:00' 처럼 같은 날 마감
     until = re.search(r"까지", text)
     if until:
-        before = [d for pos, d in dates if pos < until.start()]
+        before = [d for pos, d in dates if 0 < until.start() - pos <= 40]
         if before:
             return before[-1]
     return None
+
+
+def has_full_date(text: str | None) -> bool:
+    """연도가 들어간 날짜가 있는가 (목록에서 게시일 칸을 찾을 때 사용)."""
+    return bool(text) and bool(_FULL.search(text) or _SHORT_YEAR.search(text))
 
 
 def days_left(deadline: date | None, today: date) -> int | None:

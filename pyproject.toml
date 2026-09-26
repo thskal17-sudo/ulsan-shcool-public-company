@@ -1,0 +1,9 @@
+[project]
+name = "ulsan-jobs"
+version = "0.1.0"
+description = "울산 공공기관 강사 구인공고를 매일 수집해 엑셀로 메일 발송"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

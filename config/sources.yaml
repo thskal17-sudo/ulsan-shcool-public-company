@@ -1,11 +1,15 @@
-# 울산 강사 구인공고 수집 대상 목록 (초안)
+# 울산 강사 구인공고 수집 대상 목록
 #
-# - verified: Phase 0에서 실제 접속·파싱을 확인하면 true로 바꾼다.
-# - enabled: false 인 항목은 수집하지 않는다 (주소 미확인·추가 조사 필요).
-# - keyword_filter: 강사 전용 게시판이면 false (모든 글을 수집), 일반 공지 게시판이면 true.
-# - phase: 구현 우선순위 (1 = MVP).
+# - phase: 구현 단계. max_phase 이하이면서 enabled: true 인 소스만 매일 수집한다.
+# - verified: GitHub Actions 에서 실제 접속·목록 구조를 확인한 소스.
+# - keyword_filter: 강사 전용 게시판이면 false (모든 글 수집), 일반 게시판이면 true (강사 키워드로 거름).
+# - options: 수집기별 설정 (page_param: 페이지 번호 파라미터, key_param: 게시글 번호 파라미터 등).
+#   자세한 설명은 src/ulsan_jobs/collectors/board.py 머리말 참고.
 #
-# 주소는 설계 시점(2026-09) 웹 검색으로 확인한 값이며, 실제 목록 URL·셀렉터는 구현 시 검증한다.
+# 새 소스를 추가할 때는 먼저 진단 도구로 구조를 확인한다:
+#   GitHub Actions > 사이트 진단 (probe) > Run workflow > args: --no-reach --url <목록 주소>
+
+max_phase: 1
 
 sources:
   # ─────────────────────────────── 국가·공공 (공식 API)
@@ -16,14 +20,13 @@ sources:
     collector: work24_api
     url: https://www.work24.go.kr/cm/e/a/0110/selectOpenApiIntro.do
     params:
-      region: ["31110", "31140", "31170", "31200", "31710"]  # 중구·남구·동구·북구·울주군
+      region: "31000"   # 울산광역시 전체
       keyword: 강사
-    auth_env: WORK24_API_KEY
+    auth_env: WORK24_API_KEY  # 없으면 '설정필요'로 표시하고 건너뜀
     keyword_filter: true
     phase: 1
     enabled: true
     verified: false
-
   - id: alio_api
     name: 잡알리오 공공기관 채용정보 API
     org_type: 국가·공공기관
@@ -54,41 +57,58 @@ sources:
 
   # ─────────────────────────────── 교육청·학교
   - id: use_job_general
-    name: 울산교육청 인력풀 - 일반채용공고
+    name: 울산교육청 통합인력풀 - 일반채용공고(개인위탁 포함)
     org_type: 교육청·학교
     district: 울산전체
     collector: use_cms
     url: https://use.go.kr/job/user/bbs/BD_selectBbsList.do?q_bbsSn=2249
     pages: 3
-    keyword_filter: true
+    keyword_filter: true  # 기간제교원·조리사 등도 올라오는 게시판이라 강사 공고만 거름 ('구분' 열도 함께 봄)
     phase: 1
     enabled: true
-    verified: false
+    verified: true
+    options:
+      page_param: q_currPage
+      key_param: q_bbsDocNo
 
+  - id: use_jobpost_instructor
+    name: 울산교육청 통합인력풀 - 온라인채용공고(직종 강사)
+    org_type: 교육청·학교
+    district: 울산전체
+    collector: use_cms
+    url: https://use.go.kr/job/user/jobpost/BD_selectJobPostList.do?q_jobOcptNm=강사
+    pages: 2
+    keyword_filter: false
+    phase: 1
+    enabled: true
+    verified: true
+    options:
+      page_param: q_currPage
+      key_param: q_jobPostSn
   - id: use_after_company
     name: 방과후·늘봄지원센터 - 채용공고(업체위탁)
     org_type: 교육청·학교
     district: 울산전체
     collector: use_cms
     url: https://use.go.kr/after/user/bbs/BD_selectBbsList.do?q_bbsSn=2168
-    pages: 2
-    keyword_filter: false
+    pages: 1
+    keyword_filter: true
     phase: 1
     enabled: true
-    verified: false
-
+    verified: true
+    options:
+      page_param: q_currPage
+      key_param: q_bbsDocNo
   - id: afschool_private
     name: 울산방과후학교 온라인지원시스템 - 개인위탁 강사모집
     org_type: 교육청·학교
     district: 울산전체
     collector: afschool
     url: https://afschool.use.go.kr/usPrivateApply
-    pages: 3
     keyword_filter: false
     phase: 1
     enabled: true
-    verified: false
-
+    verified: true
   # ─────────────────────────────── 지자체 (시청·구군청)
   - id: ulsan_city_exam
     name: 울산시청 시험공고
@@ -168,17 +188,50 @@ sources:
     verified: false
 
   # ─────────────────────────────── 공단 (체육시설)
+  - id: uic_lesson
+    name: 울산시설공단 - 강습위탁
+    org_type: 공단(체육시설)
+    district: 울산전체
+    collector: generic_board
+    url: https://www.uic.or.kr/notify/noti06_2.do
+    pages: 2
+    keyword_filter: false
+    phase: 1
+    enabled: true
+    verified: false  # 메뉴 주소만 확인, 목록 구조는 첫 실행에서 확인
+    options:
+      page_param: pageIndex
+      org_name: 울산시설공단
+
+  - id: uic_parttime
+    name: 울산시설공단 - 기간제(단시간) 근로자 공고
+    org_type: 공단(체육시설)
+    district: 울산전체
+    collector: generic_board
+    url: https://www.uic.or.kr/notify/noti06_1_2.do
+    pages: 2
+    keyword_filter: true
+    phase: 1
+    enabled: true
+    verified: true
+    options:
+      page_param: pageIndex
+      org_name: 울산시설공단
+
   - id: uic_notice
-    name: 울산시설공단 채용알림(채용/강습위탁)
+    name: 울산시설공단 - 정규직(개방형 직위) 공고
     org_type: 공단(체육시설)
     district: 울산전체
     collector: generic_board
     url: https://www.uic.or.kr/notify/noti06.do
+    pages: 1
     keyword_filter: true
     phase: 1
     enabled: true
-    verified: false
-
+    verified: true
+    options:
+      page_param: pageIndex
+      org_name: 울산시설공단
   - id: uic_recruit
     name: 울산시설공단 채용 홈페이지
     org_type: 공단(체육시설)
@@ -186,10 +239,9 @@ sources:
     collector: generic_board
     url: https://uic.or.kr/recruit/notify/notify02.do
     keyword_filter: true
-    phase: 1
-    enabled: true
-    verified: false
-
+    phase: 2
+    enabled: false  # 지원서 접수용 사이트로 공고 목록이 없음 (공고는 위 채용알림 게시판에 올라옴)
+    verified: true
   - id: namgu_uncmc
     name: 울산남구도시관리공단 채용
     org_type: 공단(체육시설)
