@@ -84,3 +84,31 @@ def test_work24_xml(fixture_bytes):
     include, exclude = re.compile(DEFAULT_ORG_INCLUDE), re.compile(DEFAULT_ORG_EXCLUDE)
     public = [i["company"] for i in items if include.search(i["company"]) and not exclude.search(i["company"])]
     assert public == ["울산광역시남구도시관리공단", "울산동부종합사회복지관"]
+
+
+def test_json_board_items():
+    from ulsan_jobs.collectors.json_board import parse_json_items
+
+    payload = {
+        "resultList": [
+            {"bbsKey": "3e2f-01", "title": "2026년 하반기 요가 강사 모집 공고", "regdate": "2026-09-20", "isTop": "N"},
+            {"bbsKey": "3e2f-02", "subject": "<b>테마특강</b> 수강생 모집 &amp; 안내", "regdate": "2026-09-19"},
+            {"bbsKey": "", "title": "키 없는 글"},
+        ]
+    }
+    opts = {"link_template": "http://www.w1.or.kr/womenhall/bbs/selectBoardDetailView.do?classId=NOTICE&bbsKey={key}"}
+    items = parse_json_items(payload, opts, TODAY)
+    assert [i["key"] for i in items] == ["3e2f-01", "3e2f-02"]
+    assert items[0]["url"].endswith("bbsKey=3e2f-01")
+    assert items[0]["posted"] == date(2026, 9, 20)
+    assert items[1]["title"] == "테마특강 수강생 모집 & 안내"
+
+
+def test_ujcmc_style_template(fixture_bytes):
+    html = """<table><tr><th>번호</th><th>제목</th><th>작성자</th><th>등록일</th></tr>
+    <tr><td>528</td><td><a href="javascript:boardView('employ','528','');">중구수영장 시간강사(프리랜서) 모집 공고</a></td>
+    <td>관리자</td><td>2026-09-10</td></tr></table>"""
+    opts = {"link_template": "https://www.ujcmc.or.kr/bbs/{0}/boardView.do?n={1}&p=view"}
+    rows = parse_board(html, "https://www.ujcmc.or.kr/bbs/employ/boardList.do", opts, TODAY)
+    assert rows[0].url == "https://www.ujcmc.or.kr/bbs/employ/boardView.do?n=528&p=view"
+    assert rows[0].key == "528"

@@ -11,6 +11,7 @@ options (모두 선택)
     form_link       true 면 onclick 으로 제출하는 <form> 의 action + hidden 값으로 상세 주소를 만든다
     detail_get      상세 페이지를 GET 으로 열 수 있으면 true (마감일 추출에 사용, 기본 true)
     org_name        기관명 기본값 (작성자 열이 '관리자' 등일 때)
+    link_base       상대 링크를 풀 기준 주소 (페이지 주소와 다를 때. <base href> 가 있으면 자동 적용)
 """
 from __future__ import annotations
 
@@ -125,7 +126,7 @@ def _pick_rows(soup: BeautifulSoup, row_selector: str | None) -> tuple[list[Tag]
         for table in soup.find_all("table"):
             if table.find("table"):  # 레이아웃용 바깥 표는 건너뜀
                 continue
-            rows = [tr for tr in table.find_all("tr") if tr.find("td") and tr.find("a")]
+            rows = [tr for tr in table.find_all("tr") if tr.find("td") and (tr.find("a") or _submit_title(tr))]
             if len(rows) > len(best_rows):
                 best, best_rows = table, rows
         table, rows = best, best_rows
@@ -136,6 +137,24 @@ def _pick_rows(soup: BeautifulSoup, row_selector: str | None) -> tuple[list[Tag]
         if head_row is not None:
             headers = [_clean(th.get_text()) for th in head_row.find_all(["th", "td"])]
     return rows, headers
+
+
+def _submit_title(tag: Tag) -> Tag | None:
+    """제목이 링크 대신 폼 제출 버튼(<input type=submit value="제목">)인 게시판."""
+    for inp in tag.find_all("input"):
+        if (inp.get("type") or "").lower() == "submit" and len(_clean(inp.get("value"))) >= 2:
+            return inp
+    return None
+
+
+def _form_get_url(form: Tag, base_url: str) -> str:
+    params = {
+        i.get("name"): i.get("value", "")
+        for i in form.find_all("input")
+        if i.get("name") and i.get("name") != "_csrf" and (i.get("type") or "").lower() != "submit"
+    }
+    action = urljoin(base_url, form.get("action") or base_url)
+    return f"{stable_key(action) if ';jsessionid' in action.lower() else action}?{urlencode(params)}"
 
 
 def _column_index(headers: list[str]) -> dict[str, int]:
@@ -187,6 +206,11 @@ def _form_url(soup: BeautifulSoup, onclick: str, base_url: str) -> tuple[str, st
 
 def parse_board(html: bytes | str, base_url: str, opts: dict, today: date) -> list[BoardRow]:
     soup = BeautifulSoup(html, "lxml")
+    base_tag = soup.find("base", href=True)
+    if opts.get("link_base"):
+        base_url = opts["link_base"]
+    elif base_tag is not None:
+        base_url = urljoin(base_url, base_tag["href"])
     rows, headers = _pick_rows(soup, opts.get("row_selector"))
     col = _column_index(headers)
     out: list[BoardRow] = []
@@ -196,14 +220,21 @@ def parse_board(html: bytes | str, base_url: str, opts: dict, today: date) -> li
         title_td = tds[col["title"]] if aligned and "title" in col else None
         anchors = (title_td or tr).find_all("a")
         anchor = max(anchors, key=lambda a: len(_clean(a.get_text())), default=None)
-        if anchor is None:
+        submit = _submit_title(title_td or tr) if anchor is None or len(_clean(anchor.get_text())) < 2 else None
+        if submit is not None and submit.find_parent("form") is not None:
+            title = _clean(submit.get("value"))
+            url = _form_get_url(submit.find_parent("form"), base_url)
+            key_param = opts.get("key_param")
+            values = parse_qs(urlsplit(url).query).get(key_param) if key_param else None
+            key, detail_ok = (values[0] if values else url), True
+        elif anchor is not None:
+            title = _clean(anchor.get("title") if len(_clean(anchor.get_text())) < 2 else anchor.get_text())
+            url, key, detail_ok = _resolve_link(soup, anchor, tr, base_url, opts)
+        else:
             continue
-        title = _clean(anchor.get("title") if len(_clean(anchor.get_text())) < 2 else anchor.get_text())
         title = re.sub(r"\s*(새글|NEW|new|첨부파일|파일첨부)$", "", title)
         if len(title) < 2:
             continue
-
-        url, key, detail_ok = _resolve_link(soup, anchor, tr, base_url, opts)
 
         def cell(role: str) -> str:
             return _clean(tds[col[role]].get_text(" ")) if aligned and role in col else ""

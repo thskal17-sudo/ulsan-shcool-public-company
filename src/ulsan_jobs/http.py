@@ -76,7 +76,7 @@ class Http:
     def request(self, method: str, url: str, **kwargs) -> requests.Response:
         host = urlsplit(url).hostname or ""
         self._wait_turn(host)
-        kwargs.setdefault("timeout", (10, self.timeout))
+        kwargs.setdefault("timeout", (15, self.timeout))  # 일부 관공서 서버는 연결이 느림
         kwargs["stream"] = True
         if host in self._ca_bundles:
             kwargs.setdefault("verify", self._ca_bundles[host])
