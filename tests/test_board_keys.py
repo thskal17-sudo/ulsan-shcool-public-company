@@ -65,3 +65,33 @@ def test_submit_button_titles():
                      "?nttId=8979&bbsId=BBSMSTR_000000000032&pageIndex=1")
     assert r.posted == date(2026, 9, 18)
     assert r.org == ""
+
+
+def test_template_key_param_with_code_argument():
+    # 나라일터: fn_apmView('020', '303834') - 첫 인자는 구분 코드, 글 번호는 두 번째
+    html = """<table><tr><th>번호</th><th>공고명</th><th>기관명</th><th>공고게시일</th></tr>
+    <tr><td>1</td><td><a href="javascript:fn_apmView('020', '303834')">강사 채용 공고 A</a></td><td>울산광역시</td><td>2026-09-18</td></tr>
+    <tr><td>2</td><td><a href="javascript:fn_apmView('020', '303775')">강사 채용 공고 B</a></td><td>울산광역시 동구</td><td>2026-09-16</td></tr>
+    </table>"""
+    opts = {
+        "link_template": "https://www.gojobs.go.kr/apmView.do?empmnsn={1}&searchJobsecode={0}",
+        "key_param": "empmnsn",
+    }
+    rows = parse_board(html.encode(), "https://www.gojobs.go.kr/apmList.do", opts, date(2026, 9, 27))
+    assert [r.key for r in rows] == ["303834", "303775"]
+    assert rows[0].url == "https://www.gojobs.go.kr/apmView.do?empmnsn=303834&searchJobsecode=020"
+    # key_param 이 없어도 긴 숫자 인자를 글 번호로
+    rows = parse_board(html.encode(), "https://www.gojobs.go.kr/apmList.do", {"link_template": opts["link_template"]},
+                       date(2026, 9, 27))
+    assert [r.key for r in rows] == ["303834", "303775"]
+
+
+def test_template_wins_over_plain_href_when_onclick_has_args():
+    # 남구 평생학습: href 는 번호 없는 view.do, 실제 글 번호는 onclick 에만 있다
+    html = """<table><tr><th>번호</th><th>제목</th><th>작성일</th></tr>
+    <tr><td>1</td><td><a href="/edu/board/eduBoard/view.do" onclick="goBoardArticle('534458'); return false;">배달강사 등록 안내</a></td><td>2026.09.17</td></tr>
+    </table>"""
+    opts = {"link_template": "https://www.ulsannamgu.go.kr/edu/board/eduBoard/view.do?nttId={0}"}
+    [row] = parse_board(html.encode(), "https://www.ulsannamgu.go.kr/edu/board/eduBoard/list.do", opts, date(2026, 9, 27))
+    assert row.url == "https://www.ulsannamgu.go.kr/edu/board/eduBoard/view.do?nttId=534458"
+    assert row.key == "534458"

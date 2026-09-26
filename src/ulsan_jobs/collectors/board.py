@@ -65,9 +65,12 @@ class BoardCollector(Collector):
             if resp is None:
                 break
             rows = parse_board(resp.content, resp.url, opts, self.today)
-            fresh = [r for r in rows if r.key not in seen]
+            fresh = []
+            for r in rows:
+                if r.key not in seen:  # 공지 줄과 일반 줄에 같은 글이 두 번 나오는 게시판도 있다
+                    seen.add(r.key)
+                    fresh.append(r)
             for r in fresh:
-                seen.add(r.key)
                 postings.append(
                     Posting(
                         source_id=self.source.id,
@@ -211,10 +214,13 @@ def _js_args(code: str) -> list[str]:
 
 
 def _pick_key(args: list[str]) -> str:
-    """JS 인자 중 게시글 번호로 보이는 값 (boardView('employ','207','') → '207')."""
-    for a in args:
-        if re.fullmatch(r"\d+", a):
-            return a
+    """JS 인자 중 게시글 번호로 보이는 값 (boardView('employ','207','') → '207').
+
+    숫자만인 인자가 여럿이면 가장 긴 것 (fn_apmView('020', '303834') → '303834', '020' 은 구분 코드).
+    """
+    digits = [a for a in args if re.fullmatch(r"\d+", a)]
+    if digits:
+        return max(digits, key=len)
     for a in args:
         if re.search(r"\d{3,}", a):
             return a
@@ -298,6 +304,23 @@ def _resolve_link(soup, anchor: Tag, tr: Tag, base_url: str, opts: dict) -> tupl
     onclick = anchor.get("onclick") or tr.get("onclick") or ""
     key_param = opts.get("key_param")
 
+    def key_from(url: str, fallback: str) -> str:
+        if key_param:
+            values = parse_qs(urlsplit(url).query).get(key_param)
+            return values[0] if values else fallback
+        return fallback
+
+    # link_template 이 있고 onclick 에 인자가 있으면 href 보다 우선
+    # (남구 평생학습: href="/edu/board/eduBoard/view.do" + onclick="goBoardArticle('534458')")
+    template = opts.get("link_template")
+    onclick_args = _js_args(onclick) if onclick else []
+    if template and onclick_args:
+        try:
+            url = template.format(*onclick_args)
+            return url, key_from(url, _pick_key(onclick_args)), True
+        except (IndexError, KeyError):
+            pass
+
     if href and not href.lower().startswith("javascript") and not href.startswith("#"):
         url = urljoin(base_url, href)
         key = stable_key(url)
@@ -318,11 +341,10 @@ def _resolve_link(soup, anchor: Tag, tr: Tag, base_url: str, opts: dict) -> tupl
             return url, key, True
 
     args = _js_args(code)
-    template = opts.get("link_template")
     if template and args:
         try:
             url = template.format(*args)
-            return url, _pick_key(args), True
+            return url, key_from(url, _pick_key(args)), True
         except (IndexError, KeyError):
             pass
     title = _clean(anchor.get_text())
