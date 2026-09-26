@@ -241,6 +241,7 @@ sources:
     verified: false  # 메뉴 주소만 확인, 목록 구조는 첫 실행에서 확인
     options:
       page_param: pageIndex
+      attachment_template: "/cmm/fms/FileDownNotice.do?atchFileId={0}"  # 첨부 공고문에서 마감일 찾기
       org_name: 울산시설공단
 
   - id: uic_parttime
@@ -256,6 +257,7 @@ sources:
     verified: true
     options:
       page_param: pageIndex
+      attachment_template: "/cmm/fms/FileDownNotice.do?atchFileId={0}"  # 첨부 공고문에서 마감일 찾기
       org_name: 울산시설공단
 
   - id: uic_notice
@@ -271,7 +273,9 @@ sources:
     verified: true
     options:
       page_param: pageIndex
+      attachment_template: "/cmm/fms/FileDownNotice.do?atchFileId={0}"  # 첨부 공고문에서 마감일 찾기
       org_name: 울산시설공단
+
   - id: uic_recruit
     name: 울산시설공단 채용 홈페이지
     org_type: 공단(체육시설)
@@ -330,6 +334,7 @@ sources:
     options:
       key_param: nttId
       truncated_titles: true  # 목록 제목이 40자 안팎에서 잘림 → 상세 페이지에서 전체 제목을 받아 판별
+      attachment_template: "/portal/cmm/fms/FileDown.do?atchFileId={0}&fileSn={1}"
       org_name: 울주군시설관리공단
 
   - id: uljusiseol_hire
@@ -346,6 +351,7 @@ sources:
     options:
       key_param: nttId
       truncated_titles: true  # 목록 제목이 40자 안팎에서 잘림 → 상세 페이지에서 전체 제목을 받아 판별
+      attachment_template: "/portal/cmm/fms/FileDown.do?atchFileId={0}&fileSn={1}"
       org_name: 울주군시설관리공단
 
   - id: uljusiseol_parttime
@@ -362,6 +368,7 @@ sources:
     options:
       key_param: nttId
       truncated_titles: true  # 목록 제목이 40자 안팎에서 잘림 → 상세 페이지에서 전체 제목을 받아 판별
+      attachment_template: "/portal/cmm/fms/FileDown.do?atchFileId={0}&fileSn={1}"
       org_name: 울주군시설관리공단
 
   - id: namgu_uncmc_home

@@ -42,6 +42,9 @@ CREATE TABLE IF NOT EXISTS source_runs (
 """
 
 
+CLOSED = "결과발표"  # 결과공고가 올라와 모집이 끝난 공고
+
+
 def _d(value: str | None) -> date | None:
     return date.fromisoformat(value) if value else None
 
@@ -80,14 +83,29 @@ class Store:
             )
             return True
         self.conn.execute(
-            """UPDATE postings SET title = ?, url = ?, status = ?, category = ?, last_seen_at = ?,
+            """UPDATE postings SET title = ?, url = ?, category = ?, last_seen_at = ?,
+                   status = CASE WHEN status = ? THEN status ELSE ? END,
                    org_name = COALESCE(NULLIF(?, ''), org_name),
                    posted_date = COALESCE(posted_date, ?),
                    deadline = COALESCE(?, deadline)
                WHERE uid = ?""",
-            (p.title, p.url, p.status, p.category, ts, p.org_name, _iso(p.posted_date), _iso(p.deadline), p.uid),
+            (p.title, p.url, p.category, ts, CLOSED, p.status, p.org_name, _iso(p.posted_date), _iso(p.deadline),
+             p.uid),
         )
         return False
+
+    def open_postings(self, source_id: str, since: date) -> list[Posting]:
+        """아직 모집중으로 알고 있는 이 소스의 최근 공고."""
+        rows = self.conn.execute(
+            """SELECT * FROM postings WHERE source_id = ? AND status = '모집중'
+                 AND COALESCE(posted_date, substr(first_seen_at, 1, 10)) >= ?""",
+            (source_id, since.isoformat()),
+        )
+        return [_to_posting(r) for r in rows]
+
+    def mark_closed(self, uid: str) -> None:
+        """결과공고가 올라와 모집이 끝난 공고로 표시 (신규·진행중에서 빠진다)."""
+        self.conn.execute("UPDATE postings SET status = ? WHERE uid = ?", (CLOSED, uid))
 
     def set_deadline(self, uid: str, deadline: date) -> None:
         self.conn.execute("UPDATE postings SET deadline = ? WHERE uid = ?", (_iso(deadline), uid))

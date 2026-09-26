@@ -18,18 +18,22 @@ def _has_any(text: str, terms: list[str]) -> str | None:
     return None
 
 
-def judge(title: str, rules: Rules, keyword_filter: bool, label: str = "") -> str | None:
+def judge(
+    title: str, rules: Rules, keyword_filter: bool, label: str = "", *, keep_results: bool | None = None
+) -> str | None:
     """강사 공고면 상태('모집중' 또는 '결과공고'), 아니면 None.
 
     포함 키워드는 제목과 게시판 구분값(label, 예: '방과후강사(관련)')에서 찾고,
     제외·결과 키워드는 제목에서만 찾는다. 공백은 무시한다 ('회원 모집' == '회원모집').
+    keep_results 를 주면 rules.keep_result_notices 대신 그 값으로 결과공고를 남길지 정한다.
     """
+    keep = rules.keep_result_notices if keep_results is None else keep_results
     if _has_any(title, rules.exclude):
         return None
     if keyword_filter and not _has_any(f"{title} {label}", rules.include):
         return None
     if _has_any(title, rules.result_notice):
-        return "결과공고" if rules.keep_result_notices else None
+        return "결과공고" if keep else None
     return "모집중"
 
 

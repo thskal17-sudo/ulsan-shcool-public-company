@@ -3,16 +3,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from .attachments import extract_text, find_attachments
 from .classify import categorize, judge
 from .collectors import COLLECTORS, NotConfigured
 from .config import DEFAULT_CONFIG_DIR, Rules, Source, load_rules, load_settings
 from .dates import extract_deadline
 from .detail import extends, full_title, looks_truncated, page_text
 from .http import Http
+from .matching import finished_by
 from .mailer import MailConfig, build_message, html_body, send, subject_line, text_body
 from .models import Posting, SourceResult, now_kst
 from .report_excel import build_report, sort_key
@@ -94,6 +96,7 @@ def _collect_source(
         return result
 
     truncated_board = bool(src.options.get("truncated_titles"))
+    result_notices: list[Posting] = []
     for p in items:
         soup, tried = None, False
         if p.detail_url and (truncated_board or looks_truncated(p.title)):
@@ -111,9 +114,13 @@ def _collect_source(
                 if soup is not None:
                     p.title = full_title(soup, p.title) or p.title
 
-        status = judge(p.title, rules, src.keyword_filter, p.label)
+        status = judge(p.title, rules, src.keyword_filter, p.label, keep_results=True)
         if status is None:
             continue
+        if status == "결과공고":
+            result_notices.append(p)
+            if not rules.keep_result_notices:
+                continue
         p.status = status
         p.category = categorize(f"{p.title} {p.label}", p.org_name, rules)
         result.matched += 1
@@ -126,9 +133,27 @@ def _collect_source(
                 soup = _fetch_detail(collector, p)
             if soup is not None:
                 deadline = extract_deadline(page_text(soup), today, anywhere=False)
+                if deadline is None and budget["details"] > 0:
+                    budget["details"] -= 1
+                    deadline = _deadline_from_attachment(collector, soup, p, today)
                 if deadline:
                     store.set_deadline(p.uid, deadline)
+
+    if result_notices:
+        close_finished(store, src.id, result_notices, today)
     return result
+
+
+def close_finished(store: Store, source_id: str, result_notices: list[Posting], today: date) -> list[Posting]:
+    """같은 게시판에 나중에 결과공고가 올라온 모집공고를 '모집 끝'으로 닫는다."""
+    closed = []
+    for recruit in store.open_postings(source_id, since=today - timedelta(days=120)):
+        res = finished_by(recruit, result_notices)
+        if res is not None:
+            store.mark_closed(recruit.uid)
+            closed.append(recruit)
+            log.info("모집 끝(결과공고): %s ← %s", recruit.title, res.title)
+    return closed
 
 
 def _fetch_detail(collector, p: Posting):
@@ -137,6 +162,22 @@ def _fetch_detail(collector, p: Posting):
     except Exception as exc:  # noqa: BLE001 - 상세는 보조 정보라 실패해도 진행
         log.info("상세 페이지 실패 %s: %s", p.detail_url, exc)
         return None
+
+
+def _deadline_from_attachment(collector, soup, p: Posting, today: date) -> date | None:
+    """본문에 마감일이 없으면 첨부 공고문(HWP/HWPX/PDF)에서 찾는다."""
+    found = find_attachments(soup, p.detail_url or "", collector.source.options.get("attachment_template"))
+    if not found:
+        return None
+    att = found[0]
+    try:
+        text = extract_text(collector.http.get(att.url).content)
+    except Exception as exc:  # noqa: BLE001 - 첨부는 보조 정보라 실패해도 진행
+        log.info("첨부 내려받기 실패 %s: %s", att.url, exc)
+        return None
+    deadline = extract_deadline(text, today, anywhere=False) if text else None
+    log.info("첨부 %s → %s", att.name, deadline or ("글자 없음" if not text else "마감일 못 찾음"))
+    return deadline
 
 
 def worth_detail(p: Posting, today: date, rules: Rules) -> bool:
@@ -178,8 +219,10 @@ def run(
         store.commit()
 
         pending = store.unreported()
-        new = sorted((p for p in pending if is_fresh(p, today, rules)), key=lambda p: sort_key(p, today))
         statuses = ("모집중", "결과공고") if rules.keep_result_notices else ("모집중",)
+        new = sorted(
+            (p for p in pending if p.status in statuses and is_fresh(p, today, rules)), key=lambda p: sort_key(p, today)
+        )
         active = sorted(store.active(today, rules.active_max_age_days, statuses), key=lambda p: sort_key(p, today))
         closing_soon = [
             p for p in active if p.deadline is not None and 0 <= (p.deadline - today).days <= rules.closing_soon_days

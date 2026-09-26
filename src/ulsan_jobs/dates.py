@@ -75,7 +75,10 @@ def find_all_dates(text: str, today: date) -> list[tuple[int, date]]:
     return [(s, d) for s, _, d in found]
 
 
-_PERIOD_LABEL = re.compile(r"(접수|모집|신청|제출|공고)\s*(기간|기한|마감|일시|일정)")
+_PERIOD_LABEL = re.compile(
+    r"(접수|모집|신청|제출|공고)\s*(기간|기한|마감|일시|일정)"
+    r"|(원서|서류|응시|지원서?)\s*접수\s*(기간|기한|마감|일시|일정)?"  # 공고문에 흔한 '원서접수 : 9. 21. ~ 9. 25.'
+)
 # 기간 표시 뒤의 글은 다음 항목 이름이 나오기 전까지만 본다 ('접수기간 ~ … 사업기간 9. 1. ~ 12. 31.' 방지)
 _NEXT_ITEM = re.compile(r"기간|기한|일시|장소|방법|대상|문의|자격|인원|구분")
 
