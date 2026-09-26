@@ -39,6 +39,7 @@ RAW_FROM = ""
 GREP: re.Pattern | None = None
 FOLLOW_JS = False
 AROUND: list[str] = ["접수기간", "모집기간", "신청기간", "마감"]
+FORM_POST: tuple[str, dict[str, str]] | None = None  # (폼 셀렉터, 추가 값): GET 후 폼을 POST 한 응답을 본다
 
 # 게시판 목록 외에 메뉴 구조(다른 게시판 번호)를 찾기 위해 보는 페이지
 EXTRA_URLS = [
@@ -202,6 +203,16 @@ def parse_report(label: str, url: str) -> None:
     print(f"PARSE {label}")
     try:
         r = fetch(url)
+        if FORM_POST is not None:
+            from urllib.parse import urljoin
+
+            selector, extra = FORM_POST
+            form = BeautifulSoup(r.content, "lxml").select_one(selector)
+            fields = {i["name"]: i.get("value", "") for i in form.find_all("input", {"type": "hidden"}) if i.get("name")}
+            data = {**fields, **extra}
+            action = urljoin(r.url, form.get("action") or "") or r.url
+            print(f"  POST {action} data={data} cookies={list(HTTP.session.cookies.keys())}")
+            r = HTTP.post(action, data=data)
     except Exception as exc:  # noqa: BLE001
         print(f"  ERROR {type(exc).__name__}: {clip(str(exc), 300)}")
         return
@@ -313,11 +324,17 @@ def main() -> int:
     parser.add_argument("--follow-js", action="store_true", help="--grep 을 같은 사이트의 외부 JS 파일에도 적용")
     parser.add_argument("--browser-ua", action="store_true", help="봇 표시 없는 일반 브라우저 User-Agent 사용")
     parser.add_argument("--legacy-tls", action="store_true", help="--url 호스트에 구형 TLS 허용")
+    parser.add_argument("--form-post", default=None, help="--parse 에서 이 셀렉터의 폼을 POST 한 응답을 본다 (예: form#frm)")
+    parser.add_argument("--data", default="", help="--form-post 에 더할 값 (a=1&b=2)")
     parser.add_argument("--attach", action="store_true", help="--url(상세 페이지)의 첨부 공고문을 내려받아 글자와 마감일 확인")
     parser.add_argument("--attach-template", default=None, help="--attach 에서 쓸 첨부 주소 틀 (sources.yaml 의 attachment_template)")
     args = parser.parse_args()
-    global RAW, RAW_FROM, GREP, FOLLOW_JS
+    global RAW, RAW_FROM, GREP, FOLLOW_JS, FORM_POST
     RAW, RAW_FROM = args.raw, args.raw_from
+    if args.form_post:
+        from urllib.parse import parse_qsl
+
+        FORM_POST = (args.form_post, dict(parse_qsl(args.data, keep_blank_values=True)))
     GREP = re.compile(args.grep) if args.grep else None
     FOLLOW_JS = args.follow_js
     if args.browser_ua:
