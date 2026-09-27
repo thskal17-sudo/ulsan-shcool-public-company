@@ -1,0 +1,43 @@
+name: 사이트 진단 (probe)
+
+on:
+  workflow_dispatch:
+    inputs:
+      args:
+        description: "probe.py 인자 (예: --detail uic_notice / --url https://...)"
+        required: false
+        default: ""
+      check:
+        description: "check-source 로 시험 수집할 소스 id (공백 구분, 예: junggu_hire ubimc_hire)"
+        required: false
+        default: ""
+  push:
+    paths:
+      - "scripts/probe.py"
+      - "src/ulsan_jobs/http.py"
+      - "scripts/probe_urls*.txt"
+      - ".github/workflows/probe.yml"
+      - "config/sources.yaml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      # set -f: URL 의 ? 등이 파일 이름으로 확장되지 않게 함
+      - if: github.event.inputs.check == ''
+        run: set -f; python scripts/probe.py $PROBE_ARGS
+        env:
+          PYTHONUNBUFFERED: "1"
+          PROBE_ARGS: ${{ github.event.inputs.args }}
+      - if: github.event.inputs.check != ''
+        run: python -m ulsan_jobs check-source $CHECK_IDS
+        env:
+          PYTHONPATH: src
+          PYTHONUNBUFFERED: "1"
+          CHECK_IDS: ${{ github.event.inputs.check }}

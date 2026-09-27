@@ -1,11 +1,15 @@
-# 울산 강사 구인공고 수집 대상 목록 (초안)
+# 울산 강사 구인공고 수집 대상 목록
 #
-# - verified: Phase 0에서 실제 접속·파싱을 확인하면 true로 바꾼다.
-# - enabled: false 인 항목은 수집하지 않는다 (주소 미확인·추가 조사 필요).
-# - keyword_filter: 강사 전용 게시판이면 false (모든 글을 수집), 일반 공지 게시판이면 true.
-# - phase: 구현 우선순위 (1 = MVP).
+# - phase: 구현 단계. max_phase 이하이면서 enabled: true 인 소스만 매일 수집한다.
+# - verified: GitHub Actions 에서 실제 접속·목록 구조를 확인한 소스.
+# - keyword_filter: 강사 전용 게시판이면 false (모든 글 수집), 일반 게시판이면 true (강사 키워드로 거름).
+# - options: 수집기별 설정 (page_param: 페이지 번호 파라미터, key_param: 게시글 번호 파라미터 등).
+#   자세한 설명은 src/ulsan_jobs/collectors/board.py 머리말 참고.
 #
-# 주소는 설계 시점(2026-09) 웹 검색으로 확인한 값이며, 실제 목록 URL·셀렉터는 구현 시 검증한다.
+# 새 소스를 추가할 때는 먼저 진단 도구로 구조를 확인한다:
+#   GitHub Actions > 사이트 진단 (probe) > Run workflow > args: --no-reach --url <목록 주소>
+
+max_phase: 3
 
 sources:
   # ─────────────────────────────── 국가·공공 (공식 API)
@@ -16,168 +20,271 @@ sources:
     collector: work24_api
     url: https://www.work24.go.kr/cm/e/a/0110/selectOpenApiIntro.do
     params:
-      region: ["31110", "31140", "31170", "31200", "31710"]  # 중구·남구·동구·북구·울주군
+      region: "31000"   # 울산광역시 전체
       keyword: 강사
-    auth_env: WORK24_API_KEY
+    auth_env: WORK24_API_KEY  # 없으면 '설정필요'로 표시하고 건너뜀
     keyword_filter: true
     phase: 1
     enabled: true
     verified: false
-
-  - id: alio_api
-    name: 잡알리오 공공기관 채용정보 API
+  - id: gojobs_list
+    name: 나라일터 모집공고 (기관명에 '울산' 포함)
     org_type: 국가·공공기관
     district: 울산전체
-    collector: alio_api
-    url: https://www.data.go.kr/data/15125273/openapi.do
-    params:
-      work_region: 울산
-    auth_env: DATA_GO_KR_KEY
+    collector: generic_board
+    # 기관명 검색(searchSelectninsttnm=울산)은 GET 으로도 되고, 울산 소재 국가기관·지자체·학교 공고가 나온다
+    url: https://www.gojobs.go.kr/apmList.do?menuNo=401&searchJobsecode=020&searchSelectninsttnm=%EC%9A%B8%EC%82%B0&pageIndex=1
+    pages: 1  # 2쪽은 GET 으로 넘어가지 않음(POST 전용). 새 글은 1쪽에 올라오므로 매일 1쪽이면 충분
     keyword_filter: true
-    phase: 2
+    phase: 3
     enabled: true
     verified: false
+    options:
+      # 제목 링크 fn_apmView('020', '303834') → 상세는 GET 으로도 열림
+      link_template: "https://www.gojobs.go.kr/apmView.do?empmnsn={1}&searchJobsecode={0}&menuNo=401&selMenuNo=400"
+      key_param: empmnsn
 
-  - id: gojobs_api
-    name: 나라일터 공공취업정보 API
+  - id: alio_recruit
+    name: 잡알리오 공공기관 채용정보 (근무지 울산)
     org_type: 국가·공공기관
     district: 울산전체
-    collector: gojobs_api
-    url: https://www.data.go.kr/data/15000485/openapi.do
-    params:
-      work_region: 울산
-    auth_env: DATA_GO_KR_KEY
+    collector: form_board  # 목록은 검색 폼(_csrf 토큰)을 POST 해야 나온다
+    url: https://job.alio.go.kr/recruit.do
+    pages: 2
     keyword_filter: true
-    phase: 2
+    phase: 3
     enabled: true
     verified: false
+    options:
+      form_selector: "form#frm"
+      data:
+        search_yn: "Y"
+        location: R3016  # 울산광역시
+      page_param: pageNo
+      key_param: idx
+      # 근무지 조건은 서버에서 적용됨(전체 2047건 → 149건 확인). 여러 지역 공고는 근무지 열이 '서울 외 6' 처럼
+      # 나와서 '울산' 글자로 거르면 안 된다
 
   # ─────────────────────────────── 교육청·학교
   - id: use_job_general
-    name: 울산교육청 인력풀 - 일반채용공고
+    name: 울산교육청 통합인력풀 - 일반채용공고(개인위탁 포함)
     org_type: 교육청·학교
     district: 울산전체
     collector: use_cms
-    url: https://use.go.kr/job/user/bbs/BD_selectBbsList.do?q_bbsSn=2249
-    pages: 3
-    keyword_filter: true
+    url: https://use.go.kr/job/user/bbs/BD_selectBbsList.do?q_bbsSn=2249&q_rowPerPage=10&q_currPage=1  # q_rowPerPage 가 없으면 2쪽부터 빈 화면
+    pages: 3  # 하루 10건 안팎이 올라와서 매일 3쪽(약 3일치)을 본다
+    keyword_filter: true  # 기간제교원·조리사 등도 올라오는 게시판이라 강사 공고만 거름 ('구분' 열도 함께 봄)
     phase: 1
     enabled: true
-    verified: false
+    verified: true
+    options:
+      page_param: q_currPage
+      key_param: q_bbsDocNo
 
+  - id: use_jobpost_instructor
+    name: 울산교육청 통합인력풀 - 온라인채용공고(직종 강사)
+    org_type: 교육청·학교
+    district: 울산전체
+    collector: use_cms
+    url: https://use.go.kr/job/user/jobpost/BD_selectJobPostList.do?q_jobOcptNm=강사
+    pages: 2
+    keyword_filter: false
+    phase: 1
+    enabled: true
+    verified: true
+    options:
+      page_param: q_currPage
+      key_param: q_jobPostSn
   - id: use_after_company
     name: 방과후·늘봄지원센터 - 채용공고(업체위탁)
     org_type: 교육청·학교
     district: 울산전체
     collector: use_cms
-    url: https://use.go.kr/after/user/bbs/BD_selectBbsList.do?q_bbsSn=2168
-    pages: 2
-    keyword_filter: false
+    url: https://use.go.kr/after/user/bbs/BD_selectBbsList.do?q_bbsSn=2168&q_rowPerPage=10&q_currPage=1
+    pages: 1
+    keyword_filter: true
     phase: 1
     enabled: true
-    verified: false
-
+    verified: true
+    options:
+      page_param: q_currPage
+      key_param: q_bbsDocNo
   - id: afschool_private
     name: 울산방과후학교 온라인지원시스템 - 개인위탁 강사모집
     org_type: 교육청·학교
     district: 울산전체
     collector: afschool
     url: https://afschool.use.go.kr/usPrivateApply
-    pages: 3
     keyword_filter: false
     phase: 1
     enabled: true
-    verified: false
-
+    verified: true
   # ─────────────────────────────── 지자체 (시청·구군청)
+  # 구·군청 채용공고는 전국 공통 새올 시스템 목록을 직접 GET 으로 읽는다
+  # (목록 페이지 OfrNotAncmtLSub.jsp 는 스크립트로 이 주소를 부르는 빈 껍데기)
+  - id: junggu_eminwon
+    name: 중구청 채용공고(새올)
+    org_type: 지자체
+    district: 중구
+    collector: generic_board
+    url: "https://eminwon.junggu.ulsan.kr/emwp/gov/mogaha/ntis/web/ofr/action/OfrAction.do?jndinm=OfrNotAncmtEJB&context=NTIS&method=selectListOfrNotAncmt&methodnm=selectListOfrNotAncmtHomepage&homepage_pbs_yn=Y&subCheck=Y&ofr_pageSize=10&not_ancmt_se_code=05&title=%EC%B1%84%EC%9A%A9%EA%B3%B5%EA%B3%A0&initValue=Y&countYn=Y&epcCheck=Y&nodate_recent_mm=12&pageIndex=1"
+    pages: 2
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      page_param: pageIndex
+      org_name: 울산 중구청
+      link_template: "https://eminwon.junggu.ulsan.kr/emwp/gov/mogaha/ntis/web/ofr/action/OfrAction.do?jndinm=OfrNotAncmtEJB&context=NTIS&method=selectOfrNotAncmt&methodnm=selectOfrNotAncmtRegst&not_ancmt_mgt_no={0}&homepage_pbs_yn=Y&subCheck=Y&ofr_pageSize=10&not_ancmt_se_code=05&title=%EC%B1%84%EC%9A%A9%EA%B3%B5%EA%B3%A0&initValue=Y&countYn=Y&list_gubun=A&Key=B_Subject"
+
+  - id: namgu_eminwon
+    name: 남구청 채용공고(새올)
+    org_type: 지자체
+    district: 남구
+    collector: generic_board
+    url: "https://eminwon.ulsannamgu.go.kr/emwp/gov/mogaha/ntis/web/ofr/action/OfrAction.do?jndinm=OfrNotAncmtEJB&context=NTIS&method=selectListOfrNotAncmt&methodnm=selectListOfrNotAncmtHomepage&homepage_pbs_yn=Y&subCheck=Y&ofr_pageSize=10&not_ancmt_se_code=05&title=%EC%B1%84%EC%9A%A9%EA%B3%B5%EA%B3%A0&initValue=Y&countYn=Y&epcCheck=Y&nodate_recent_mm=12&pageIndex=1"
+    pages: 2
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      page_param: pageIndex
+      org_name: 울산 남구청
+      link_base: https://eminwon.ulsannamgu.go.kr/
+      key_param: not_ancmt_mgt_no
+
+  - id: donggu_eminwon
+    name: 동구청 채용공고(새올)
+    org_type: 지자체
+    district: 동구
+    collector: generic_board
+    url: "https://eminwon.donggu.ulsan.kr/emwp/gov/mogaha/ntis/web/ofr/action/OfrAction.do?jndinm=OfrNotAncmtEJB&context=NTIS&method=selectListOfrNotAncmt&methodnm=selectListOfrNotAncmtHomepage&homepage_pbs_yn=Y&subCheck=Y&ofr_pageSize=10&not_ancmt_se_code=05&title=%EC%B1%84%EC%9A%A9%EA%B3%B5%EA%B3%A0&initValue=Y&countYn=Y&epcCheck=Y&nodate_recent_mm=12&pageIndex=1"
+    pages: 2
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      page_param: pageIndex
+      org_name: 울산 동구청
+      link_base: https://eminwon.donggu.ulsan.kr/
+      key_param: not_ancmt_mgt_no
+      legacy_tls: true  # 서버가 구형 암호군만 지원 (SSLV3_ALERT_HANDSHAKE_FAILURE)
+
+  - id: bukgu_eminwon
+    name: 북구청 채용공고(새올)
+    org_type: 지자체
+    district: 북구
+    collector: generic_board
+    url: "https://eminwon.bukgu.ulsan.kr/emwp/gov/mogaha/ntis/web/ofr/action/OfrAction.do?jndinm=OfrNotAncmtEJB&context=NTIS&method=selectListOfrNotAncmt&methodnm=selectListOfrNotAncmtHomepage&homepage_pbs_yn=Y&subCheck=Y&ofr_pageSize=10&not_ancmt_se_code=05&title=%EC%B1%84%EC%9A%A9%EA%B3%B5%EA%B3%A0&initValue=Y&countYn=Y&epcCheck=Y&nodate_recent_mm=12&pageIndex=1"
+    pages: 2
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      page_param: pageIndex
+      org_name: 울산 북구청
+      link_template: "https://eminwon.bukgu.ulsan.kr/emwp/gov/mogaha/ntis/web/ofr/action/OfrAction.do?jndinm=OfrNotAncmtEJB&context=NTIS&method=selectOfrNotAncmt&methodnm=selectOfrNotAncmtRegst&not_ancmt_mgt_no={0}&homepage_pbs_yn=Y&subCheck=Y&ofr_pageSize=10&not_ancmt_se_code=05&title=%EC%B1%84%EC%9A%A9%EA%B3%B5%EA%B3%A0&initValue=Y&countYn=Y&list_gubun=A&Key=B_Subject"
+
+  - id: ulju_eminwon
+    name: 울주군청 채용공고(새올)
+    org_type: 지자체
+    district: 울주군
+    collector: generic_board
+    url: "https://eminwon.ulju.ulsan.kr/emwp/gov/mogaha/ntis/web/ofr/action/OfrAction.do?jndinm=OfrNotAncmtEJB&context=NTIS&method=selectListOfrNotAncmt&methodnm=selectListOfrNotAncmtHomepage&homepage_pbs_yn=Y&subCheck=Y&ofr_pageSize=10&not_ancmt_se_code=05&title=%EC%B1%84%EC%9A%A9%EA%B3%B5%EA%B3%A0&initValue=Y&countYn=Y&epcCheck=Y&nodate_recent_mm=12&pageIndex=1"
+    pages: 2
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      page_param: pageIndex
+      org_name: 울산 울주군청
+      link_template: "https://eminwon.ulju.ulsan.kr/emwp/gov/mogaha/ntis/web/ofr/action/OfrAction.do?jndinm=OfrNotAncmtEJB&context=NTIS&method=selectOfrNotAncmt&methodnm=selectOfrNotAncmtRegst&not_ancmt_mgt_no={0}&homepage_pbs_yn=Y&subCheck=Y&ofr_pageSize=10&not_ancmt_se_code=05&title=%EC%B1%84%EC%9A%A9%EA%B3%B5%EA%B3%A0&initValue=Y&countYn=Y&list_gubun=A&Key=B_Subject"
+      legacy_tls: true  # 서버가 짧은 DH 키만 지원 (DH_KEY_TOO_SMALL)
+
   - id: ulsan_city_exam
     name: 울산시청 시험공고
     org_type: 지자체
     district: 울산전체
     collector: generic_board
     url: https://www.ulsan.go.kr/u/rep/transfer/testPblanc/list.ulsan?mId=001004008001000000
+    pages: 1
     keyword_filter: true
     phase: 2
     enabled: true
-    verified: false
-
-  - id: namgu_eminwon
-    name: 남구청 채용공고(새올)
-    org_type: 지자체
-    district: 남구
-    collector: eminwon
-    url: https://eminwon.ulsannamgu.go.kr/emwp/jsp/ofr/OfrNotAncmtLSub.jsp?not_ancmt_se_code=05
-    keyword_filter: true
-    phase: 2
-    enabled: true
-    verified: false
-
-  - id: bukgu_eminwon
-    name: 북구청 채용공고(새올)
-    org_type: 지자체
-    district: 북구
-    collector: eminwon
-    url: https://eminwon.bukgu.ulsan.kr/emwp/jsp/ofr/OfrNotAncmtLSub.jsp?not_ancmt_se_code=05
-    keyword_filter: true
-    phase: 2
-    enabled: true
-    verified: false
-
-  - id: junggu_eminwon
-    name: 중구청 채용공고(새올)
-    org_type: 지자체
-    district: 중구
-    collector: eminwon
-    url: null  # TODO: 주소 확인
-    keyword_filter: true
-    phase: 2
-    enabled: false
-    verified: false
-
-  - id: donggu_eminwon
-    name: 동구청 채용공고(새올)
-    org_type: 지자체
-    district: 동구
-    collector: eminwon
-    url: null  # TODO: 주소 확인
-    keyword_filter: true
-    phase: 2
-    enabled: false
-    verified: false
-
-  - id: ulju_eminwon
-    name: 울주군청 채용공고(새올)
-    org_type: 지자체
-    district: 울주군
-    collector: eminwon
-    url: null  # TODO: 주소 확인
-    keyword_filter: true
-    phase: 2
-    enabled: false
-    verified: false
+    verified: true
+    options:
+      page_param: curPage
+      key_param: testPblancNo
+      org_name: 울산광역시
 
   - id: namgu_affiliated
-    name: 남구청 산하기관 채용정보
+    name: 남구청 산하기관 채용정보 (남구도시관리공단·고래문화재단 등)
     org_type: 지자체
     district: 남구
     collector: generic_board
     url: https://www.ulsannamgu.go.kr/cop/bbs/selectBoardList.do?bbsId=hireNotice2
+    pages: 2
     keyword_filter: true
     phase: 2
     enabled: true
-    verified: false
+    verified: true
+    options:
+      page_param: pageIndex
+      key_param: nttId
 
   # ─────────────────────────────── 공단 (체육시설)
+  - id: uic_lesson
+    name: 울산시설공단 - 강습위탁
+    org_type: 공단(체육시설)
+    district: 울산전체
+    collector: generic_board
+    url: https://www.uic.or.kr/notify/noti06_2.do
+    pages: 2
+    keyword_filter: false
+    phase: 1
+    enabled: true
+    verified: false  # 메뉴 주소만 확인, 목록 구조는 첫 실행에서 확인
+    options:
+      page_param: pageIndex
+      attachment_template: "/cmm/fms/FileDownNotice.do?atchFileId={0}"  # 첨부 공고문에서 마감일 찾기
+      org_name: 울산시설공단
+
+  - id: uic_parttime
+    name: 울산시설공단 - 기간제(단시간) 근로자 공고
+    org_type: 공단(체육시설)
+    district: 울산전체
+    collector: generic_board
+    url: https://www.uic.or.kr/notify/noti06_1_2.do
+    pages: 2
+    keyword_filter: true
+    phase: 1
+    enabled: true
+    verified: true
+    options:
+      page_param: pageIndex
+      attachment_template: "/cmm/fms/FileDownNotice.do?atchFileId={0}"  # 첨부 공고문에서 마감일 찾기
+      org_name: 울산시설공단
+
   - id: uic_notice
-    name: 울산시설공단 채용알림(채용/강습위탁)
+    name: 울산시설공단 - 정규직(개방형 직위) 공고
     org_type: 공단(체육시설)
     district: 울산전체
     collector: generic_board
     url: https://www.uic.or.kr/notify/noti06.do
+    pages: 1
     keyword_filter: true
     phase: 1
     enabled: true
-    verified: false
+    verified: true
+    options:
+      page_param: pageIndex
+      attachment_template: "/cmm/fms/FileDownNotice.do?atchFileId={0}"  # 첨부 공고문에서 마감일 찾기
+      org_name: 울산시설공단
 
   - id: uic_recruit
     name: 울산시설공단 채용 홈페이지
@@ -186,103 +293,314 @@ sources:
     collector: generic_board
     url: https://uic.or.kr/recruit/notify/notify02.do
     keyword_filter: true
-    phase: 1
-    enabled: true
-    verified: false
+    phase: 2
+    enabled: false  # 지원서 접수용 사이트로 공고 목록이 없음 (공고는 위 채용알림 게시판에 올라옴)
+    verified: true
 
-  - id: namgu_uncmc
-    name: 울산남구도시관리공단 채용
+  - id: ujcmc_employ
+    name: 울산중구도시관리공단 - 채용공고 (중구수영장·테니스장 강사 등)
     org_type: 공단(체육시설)
-    district: 남구
-    collector: incruit
-    url: https://uncmc.incruit.com/
+    district: 중구
+    collector: generic_board
+    url: https://www.ujcmc.or.kr/bbs/employ/boardList.do
+    pages: 2
     keyword_filter: true
     phase: 2
     enabled: true
-    verified: false
+    verified: true
+    options:
+      page_param: start  # 쪽 번호 (start=2 → 2쪽)
+      # 제목 링크 boardView('employ','528','') 는 /bbs/employ/boardView.do 에 n=528&p=view 를 POST
+      link_template: "https://www.ujcmc.or.kr/bbs/{0}/boardView.do?n={1}&p=view"
+      org_name: 울산중구도시관리공단
 
-  - id: ulju_siseol
-    name: 울주군시설관리공단 채용
+  - id: ubimc_hire
+    name: 울산북구시설관리공단 - 채용공고 (체육센터 시간강사 등)
+    org_type: 공단(체육시설)
+    district: 북구
+    collector: generic_board
+    url: https://www.ubimc.or.kr/pageCont.do?menuNo=2040000
+    pages: 2
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      page_param: pageIndex
+      link_template: "https://www.ubimc.or.kr/cop/bbs/selectBoardArticle.do?bbsId={1}&nttId={0}&menuNo=2040000"
+      org_name: 울산북구시설관리공단
+
+  - id: uljusiseol_lesson
+    name: 울주군시설관리공단 - 강습위탁공고 (청소년수련관·체육시설 강사)
     org_type: 공단(체육시설)
     district: 울주군
-    collector: incruit
-    url: https://uljusiseol.incruit.com/
-    keyword_filter: true
-    phase: 2
-    enabled: true
-    verified: false
-
-  # TODO: 중구·동구·북구 시설(도시)관리공단 채용 게시판 조사
-
-  # ─────────────────────────────── 여성·가족
-  - id: womenhall
-    name: 울산광역시 여성회관(중부 여성새로일하기센터)
-    org_type: 여성·가족
-    district: 중구
     collector: generic_board
-    url: http://www.w1.or.kr/womenhall/bbs/boardListView.do?classId=NOTICE
-    keyword_filter: true
-    phase: 2
-    enabled: true
-    verified: false
-
-  - id: usw
-    name: 울산여성인력개발센터(울산 여성새로일하기센터)
-    org_type: 여성·가족
-    district: 울산전체
-    collector: generic_board
-    url: https://www.usw.or.kr/  # TODO: 공지사항 목록 URL 확인
-    keyword_filter: true
-    phase: 2
-    enabled: false
-    verified: false
-
-  - id: usfcc
-    name: 울산가족문화센터
-    org_type: 여성·가족
-    district: 울산전체
-    collector: generic_board
-    url: https://culture.usfcc.or.kr/  # TODO: 공지/채용 목록 URL 확인
-    keyword_filter: true
-    phase: 2
-    enabled: false
-    verified: false
-
-  # TODO: 동구·북구 여성회관, 북구 여성새로일하기센터
-
-  # ─────────────────────────────── 청소년·평생교육·도서관·문화
-  - id: yesulsan
-    name: 울산광역시 청소년활동진흥센터
-    org_type: 청소년
-    district: 울산전체
-    collector: generic_board
-    url: https://www.yesulsan.kr/  # TODO: 공지 목록 URL 확인 (notify/notice_view.jsp 상세 확인됨)
-    keyword_filter: true
-    phase: 2
-    enabled: false
-    verified: false
-
-  - id: junggu_library
-    name: 울산중구도서관 교육강사
-    org_type: 평생교육·도서관
-    district: 중구
-    collector: generic_board
-    url: https://lib.junggu.ulsan.kr/lib/contents.do?mId=001005006001000000
+    url: https://www.uljusiseol.or.kr/portal/bbs/selectArticleList.do?bbsId=BBSMSTR_000000000032
+    pages: 1
     keyword_filter: false
     phase: 2
     enabled: true
-    verified: false
+    verified: true
+    options:
+      key_param: nttId
+      truncated_titles: true  # 목록 제목이 40자 안팎에서 잘림 → 상세 페이지에서 전체 제목을 받아 판별
+      attachment_template: "/portal/cmm/fms/FileDown.do?atchFileId={0}&fileSn={1}"
+      org_name: 울주군시설관리공단
 
-  - id: bukgu_lifelong
-    name: 북구 평생학습관 공지
+  - id: uljusiseol_hire
+    name: 울주군시설관리공단 - 채용정보
+    org_type: 공단(체육시설)
+    district: 울주군
+    collector: generic_board
+    url: https://www.uljusiseol.or.kr/portal/bbs/selectArticleList.do?bbsId=BBSMSTR_000000000011
+    pages: 1
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      key_param: nttId
+      truncated_titles: true  # 목록 제목이 40자 안팎에서 잘림 → 상세 페이지에서 전체 제목을 받아 판별
+      attachment_template: "/portal/cmm/fms/FileDown.do?atchFileId={0}&fileSn={1}"
+      org_name: 울주군시설관리공단
+
+  - id: uljusiseol_parttime
+    name: 울주군시설관리공단 - 기간제(단시간)공고
+    org_type: 공단(체육시설)
+    district: 울주군
+    collector: generic_board
+    url: https://www.uljusiseol.or.kr/portal/bbs/selectArticleList.do?bbsId=BBSMSTR_000000000022
+    pages: 1
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      key_param: nttId
+      truncated_titles: true  # 목록 제목이 40자 안팎에서 잘림 → 상세 페이지에서 전체 제목을 받아 판별
+      attachment_template: "/portal/cmm/fms/FileDown.do?atchFileId={0}&fileSn={1}"
+      org_name: 울주군시설관리공단
+
+  - id: namgu_uncmc_home
+    name: 울산남구도시관리공단 홈페이지
+    org_type: 공단(체육시설)
+    district: 남구
+    collector: generic_board
+    url: https://www.uncmc.or.kr/index.ulsan
+    keyword_filter: true
+    phase: 2
+    enabled: false  # 웹방화벽이 해외 서버 접속을 차단. 공고는 남구청 산하기관 채용정보(namgu_affiliated)로 일부 수집
+    verified: true
+
+  # 동구는 시설관리공단이 없음 (체육시설 직영·위탁)
+
+  # ─────────────────────────────── 여성·가족
+  - id: usw_hire
+    name: 울산여성인력개발센터 - 채용공고
+    org_type: 여성·가족
+    district: 울산전체
+    collector: generic_board
+    url: https://www.usw.or.kr/notify/notify08.do
+    pages: 1  # 2쪽부터는 CSRF 토큰이 필요한 POST
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      key_param: nttId
+      org_name: 울산여성인력개발센터
+
+  - id: usw_notice
+    name: 울산여성인력개발센터 - 알림사항
+    org_type: 여성·가족
+    district: 울산전체
+    collector: generic_board
+    url: https://www.usw.or.kr/notify/notify01.do
+    pages: 1
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      key_param: nttId
+      org_name: 울산여성인력개발센터
+
+  - id: womenhall
+    name: 울산광역시 여성회관(중부 여성새로일하기센터) - 공지사항
+    org_type: 여성·가족
+    district: 중구
+    collector: json_board  # 목록을 스크립트(AJAX)로 불러오는 게시판
+    url: http://www.w1.or.kr/womenhall/bbs/boardListView.do?classId=NOTICE
+    pages: 1
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: false  # 요청 주소·항목 이름은 페이지 스크립트에서 확인, 실제 응답은 첫 실행에서 확인
+    options:
+      api_url: http://www.w1.or.kr/womenhall/v1/commons/bbs/selectBoardList.do
+      data:
+        classId: NOTICE
+      page_param: pageIndex
+      key_field: bbsKey
+      link_template: "http://www.w1.or.kr/womenhall/bbs/selectBoardDetailView.do?pageIndex=1&classId=NOTICE&bbsKey={key}"
+      org_name: 울산광역시여성회관
+
+  # ─────────────────────────────── 청소년
+  - id: yesulsan
+    name: 울산광역시 청소년활동진흥센터 - 알림마당
+    org_type: 청소년
+    district: 울산전체
+    collector: generic_board
+    url: https://www.yesulsan.kr/notify/notice.jsp
+    pages: 2
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      page_param: crp
+      key_param: nf_num
+      org_name: 울산광역시청소년활동진흥센터
+
+  - id: uljujb_notice
+    name: 울주 중부청소년수련관 - 알림마당
+    org_type: 청소년
+    district: 울주군
+    collector: generic_board
+    url: https://www.uljusiseol.or.kr/uljujb/notify/notice.jsp
+    pages: 1
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      page_param: pg
+      key_param: "n"
+      org_name: 울주중부청소년수련관
+
+  # ─────────────────────────────── 평생교육·도서관
+  - id: junggu_lifelong
+    name: 중구 평생학습관 - 공지사항
+    org_type: 평생교육·도서관
+    district: 중구
+    collector: generic_board
+    url: https://www.junggu.ulsan.kr/edu/community/community01.do?bid=BD000015
+    pages: 1
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      page_param: currentPage
+      key_param: bmidx
+      org_name: 울산중구평생학습관
+
+  - id: ulsan_library
+    name: 울산도서관 - 공지사항
+    org_type: 평생교육·도서관
+    district: 울산전체
+    collector: generic_board
+    url: https://library.ulsan.go.kr/lib/lib/bbs/list.do?bbsId=BBS_0000000000000010&mId=001004001000000000
+    pages: 1  # 쪽 이동이 POST 라서 첫 쪽(고정글 포함 약 27건)만 본다
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      key_param: dataId
+      org_name: 울산도서관
+
+  - id: namgu_lifelong
+    name: 남구 평생학습 - 알림마당
+    org_type: 평생교육·도서관
+    district: 남구
+    collector: generic_board
+    url: https://www.ulsannamgu.go.kr/edu/board/eduBoard/list.do
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      # 제목 링크는 goBoardArticle('글번호') 로 POST → 상세는 GET 으로도 열림
+      link_template: "https://www.ulsannamgu.go.kr/edu/board/eduBoard/view.do?nttId={0}"
+      org_name: 울산광역시 남구 평생교육과
+
+  - id: namgu_library
+    name: 남구 구립도서관 - 참여마당(공지)
+    org_type: 평생교육·도서관
+    district: 남구
+    collector: generic_board
+    url: https://www.ulsannamgu.go.kr/library/board/libNotice/list.do
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: nttId
+      org_name: 울산남구구립도서관
+
+  - id: bukgu_library
+    name: 북구 구립도서관 - 공지사항
     org_type: 평생교육·도서관
     district: 북구
     collector: generic_board
-    url: https://www.bukgu.ulsan.kr/edu/  # TODO: BBSMSTR_000000000001 목록 URL 확인
+    url: https://usbl.bukgu.ulsan.kr/main/contents.do?a_num=45359874
+    pages: 1
     keyword_filter: true
-    phase: 2
-    enabled: false
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: b_num
+      org_name: 울산북구구립도서관
+
+  - id: bukgu_lifelong
+    name: 북구 평생학습관 - 공지사항
+    org_type: 평생교육·도서관
+    district: 북구
+    collector: generic_board
+    url: https://www.bukgu.ulsan.kr/edu/cop/bbs/selectBoardList.do?bbsId=BBSMSTR_000000000001&menuNo=5010000
+    keyword_filter: true
+    phase: 3
+    enabled: false  # 목록이 표가 아니라 글마다 POST 폼 + 대부분 수강생 모집 글 → 넣지 않음
     verified: false
 
-  # TODO: 울산문화관광재단, 구·군 청소년수련관/청소년문화의집, 울산도서관·구립도서관,
-  #       울산 평생교육진흥원, 중구·남구·동구·울주군 평생학습관, 종합사회복지관
+  # ─────────────────────────────── 시 산하기관
+  - id: ubpi_hire
+    name: 울산경제일자리진흥원 - 채용정보
+    org_type: 시 산하기관
+    district: 울산전체
+    collector: generic_board
+    url: https://www.ubpi.or.kr/sub/?mcode=0403080000&mode=1&page=1
+    pages: 1
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      page_param: page
+      key_param: "no"
+      org_name: 울산경제일자리진흥원
+
+  - id: umca_hire
+    name: 울산도시공사 - 채용공고
+    org_type: 시 산하기관
+    district: 울산전체
+    collector: generic_board
+    url: https://www.umca.co.kr/umca/bbs/list.do?bbsId=BBS_0000000000000002&mId=001001002000000000
+    pages: 1
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      page_param: page
+      key_param: dataId
+      org_name: 울산도시공사
+
+  # 조사했지만 넣지 않은 곳
+  # - 동구·울주 도서관, 중구청소년센터(ulsan1318.net): 스크립트로만 열리는 페이지(봇 차단)
+  # - 중구청 홈페이지 채용공고(BBS_0000060): 중구청 새올(junggu_eminwon)과 같은 글이라 중복
+  # - 인크루트 채용대행 사이트(uncmc/uljusiseol.incruit.com): 정규 채용 전용, 강사 공고는 공단 홈페이지에 올라옴

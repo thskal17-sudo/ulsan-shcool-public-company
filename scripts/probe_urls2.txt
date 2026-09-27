@@ -1,0 +1,19 @@
+# 2단계 2차 점검 (JS 링크·페이지 이동·목록 구조 확인)
+https://www.ujcmc.or.kr/bbs/employ/boardList.do
+https://www.ubimc.or.kr/pageCont.do?menuNo=2040000&pageIndex=2
+https://www.ubimc.or.kr/cop/bbs/selectBoardArticle.do?bbsId=BBSMSTR_000000000061&nttId=4726&menuNo=2040000
+https://www.junggu.ulsan.kr/board/list.ulsan?boardId=BBS_0000060&menuCd=DOM_000000102004002000&listRow=10&listCel=1&paging=ok&startPage=2
+https://www.ulsannamgu.go.kr/cop/bbs/selectBoardList.do?bbsId=hireNotice2&pageIndex=2
+https://www.ulsan.go.kr/u/rep/transfer/testPblanc/list.ulsan?mId=001004008001000000&curPage=2
+https://www.umca.co.kr/umca/bbs/list.do?bbsId=BBS_0000000000000002&mId=001001002000000000&page=2
+https://www.junggu.ulsan.kr/edu/community/community01.do?bid=BD000015&currentPage=2
+https://www.yesulsan.kr/notify/notice.jsp
+https://www.uljusiseol.or.kr/uljujb/notify/notice.jsp
+https://www.uljusiseol.or.kr/portal/
+https://library.ulsan.go.kr/lib/lib/bbs/list.do?bbsId=BBS_0000000000000010&mId=001004001000000000
+https://www.ulsannamgu.go.kr/edu/board/eduBoard/list.do
+https://www.ulsannamgu.go.kr/library/board/libNotice/list.do
+https://usbl.bukgu.ulsan.kr/main/contents.do?a_num=45359874
+https://www.usw.or.kr/notify/notify08.do
+https://www.usw.or.kr/notify/notify01.do
+https://www.ubpi.or.kr/sub/?mcode=0403080000&mode=1&page=2
