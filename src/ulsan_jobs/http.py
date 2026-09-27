@@ -8,6 +8,10 @@ Access) 항목에서 중간 인증서를 내려받아 신뢰 목록(certifi)에 
 또 일부 새올(eminwon) 서버는 오래된 TLS 설정(짧은 DH 키, 구형 암호군)만 지원해서 최신 OpenSSL
 기본값으로는 연결 자체가 안 된다. sources.yaml 에서 legacy_tls: true 로 지정한 호스트에 한해
 암호 강도 하한만 낮춘 연결을 쓴다 (인증서 검증은 그대로).
+
+접속 자체가 안 되는 서버(해외 접속 차단·장애)는 기다리는 시간이 전체 실행 시간을 잡아먹는다.
+연결 대기는 10초씩 두 번까지만 하고, 한 번 접속에 실패한 서버는 같은 실행 안에서 다시 기다리지
+않고 바로 실패시킨다 (같은 서버의 다른 게시판들). 실행 끝의 재시도 전에 forget_unreachable() 로 잊는다.
 """
 from __future__ import annotations
 
@@ -23,6 +27,7 @@ from urllib.parse import urlsplit
 import certifi
 import requests
 from requests.adapters import HTTPAdapter
+from urllib3.exceptions import ConnectTimeoutError
 from urllib3.util.retry import Retry
 
 log = logging.getLogger(__name__)
@@ -34,6 +39,10 @@ USER_AGENT = (
 )
 
 
+class HostUnreachable(requests.exceptions.ConnectionError):
+    """이번 실행에서 이미 접속하지 못한 서버라 기다리지 않고 건너뜀."""
+
+
 class Http:
     def __init__(
         self,
@@ -42,15 +51,19 @@ class Http:
         retries: int = 2,
         max_seconds: float = 60.0,
         max_bytes: int = 10_000_000,
+        connect_timeout: float = 10.0,
+        connect_retries: int = 1,
     ):
         self.min_interval = min_interval
         self.timeout = timeout
+        self.connect_timeout = connect_timeout
         self.max_seconds = max_seconds  # 응답 하나를 받는 데 쓰는 최대 시간 (느리게 흘려보내는 서버 대비)
         self.max_bytes = max_bytes
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": USER_AGENT, "Accept-Language": "ko-KR,ko;q=0.9"})
         retry = Retry(
             total=retries,
+            connect=min(connect_retries, retries),
             backoff_factor=1.5,
             status_forcelist=(429, 500, 502, 503, 504),
             allowed_methods=("GET", "POST"),
@@ -61,11 +74,16 @@ class Http:
         self.session.mount("https://", adapter)
         self._last_request: dict[str, float] = {}
         self._ca_bundles: dict[str, str] = {}
+        self._unreachable: set[str] = set()
         self._lock = threading.Lock()
 
     def allow_legacy_tls(self, host: str) -> None:
         """이 호스트에만 구형 TLS 설정(짧은 DH 키·구형 암호군·TLS 1.0/1.1)을 허용한다."""
         self.session.mount(f"https://{host}/", LegacyTLSAdapter(max_retries=self._retry))
+
+    def forget_unreachable(self) -> None:
+        """접속 실패로 기억해 둔 서버를 잊는다 (실행 끝에서 한 번 더 시도하기 전에)."""
+        self._unreachable.clear()
 
     def get(self, url: str, **kwargs) -> requests.Response:
         return self.request("GET", url, **kwargs)
@@ -75,8 +93,10 @@ class Http:
 
     def request(self, method: str, url: str, **kwargs) -> requests.Response:
         host = urlsplit(url).hostname or ""
+        if host in self._unreachable:
+            raise HostUnreachable(f"앞서 접속하지 못한 서버라 건너뜀: {host}")
         self._wait_turn(host)
-        kwargs.setdefault("timeout", (15, self.timeout))  # 일부 관공서 서버는 연결이 느림
+        kwargs.setdefault("timeout", (self.connect_timeout, self.timeout))
         kwargs["stream"] = True
         if host in self._ca_bundles:
             kwargs.setdefault("verify", self._ca_bundles[host])
@@ -90,6 +110,10 @@ class Http:
                 raise
             kwargs["verify"] = bundle
             resp = self.session.request(method, url, **kwargs)
+        except requests.exceptions.ConnectionError as exc:
+            if _is_connect_failure(exc):
+                self._unreachable.add(host)
+            raise
         self._read_body(resp)
         resp.raise_for_status()
         return resp
@@ -146,6 +170,14 @@ class LegacyTLSAdapter(HTTPAdapter):
         ctx.options |= getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0x4)
         kwargs["ssl_context"] = ctx
         return super().init_poolmanager(*args, **kwargs)
+
+
+def _is_connect_failure(exc: requests.exceptions.ConnectionError) -> bool:
+    """연결 단계에서 실패했는가 (시간 초과·연결 거부·주소 찾기 실패). 응답 도중 끊긴 경우는 제외."""
+    if isinstance(exc, requests.exceptions.ConnectTimeout):
+        return True
+    reason = getattr(exc.args[0], "reason", None) if exc.args else None
+    return isinstance(reason, ConnectTimeoutError)  # urllib3 의 NewConnectionError 도 이 하위 클래스
 
 
 def _is_chain_error(exc: Exception) -> bool:
