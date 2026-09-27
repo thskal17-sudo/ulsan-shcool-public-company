@@ -47,7 +47,7 @@ class SourceResult:
     name: str
     org_type: str = ""
     url: str = ""
-    state: str = "정상"  # 정상 / 오류 / 0건 / 설정필요 / 미구현
+    state: str = "정상"  # 정상 / 오류 / 0건 / 접속불가 / 시간초과 / 설정필요 / 미구현
     fetched: int = 0  # 목록에서 읽은 글 수
     matched: int = 0  # 강사 공고로 판별된 수
     new: int = 0
@@ -56,4 +56,15 @@ class SourceResult:
 
     @property
     def is_problem(self) -> bool:
-        return self.state in ("오류", "0건")
+        """확인이 필요한 실패 (사이트 개편·서버 오류 등으로 공고를 놓쳤을 수 있음)."""
+        return self.state in ("오류", "0건", "시간초과")
+
+    @property
+    def is_unreachable(self) -> bool:
+        """수집 서버에서 접속 자체가 안 됨 (해외 접속 차단·일시 장애). 다른 서버·다음 실행에서 다시 수집."""
+        return self.state == "접속불가"
+
+    @property
+    def needs_other_server(self) -> bool:
+        """다른 수집 서버에서 다시 수집해 볼 만한가 (접속불가, 또는 시간이 모자라 건너뜀)."""
+        return self.state in ("접속불가", "시간초과")

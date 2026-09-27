@@ -111,7 +111,7 @@ class Http:
             kwargs["verify"] = bundle
             resp = self.session.request(method, url, **kwargs)
         except requests.exceptions.ConnectionError as exc:
-            if _is_connect_failure(exc):
+            if is_connect_failure(exc):
                 self._unreachable.add(host)
             raise
         self._read_body(resp)
@@ -172,7 +172,7 @@ class LegacyTLSAdapter(HTTPAdapter):
         return super().init_poolmanager(*args, **kwargs)
 
 
-def _is_connect_failure(exc: requests.exceptions.ConnectionError) -> bool:
+def is_connect_failure(exc: requests.exceptions.ConnectionError) -> bool:
     """연결 단계에서 실패했는가 (시간 초과·연결 거부·주소 찾기 실패). 응답 도중 끊긴 경우는 제외."""
     if isinstance(exc, requests.exceptions.ConnectTimeout):
         return True

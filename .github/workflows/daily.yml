@@ -21,6 +21,8 @@ jobs:
   collect:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      retry_sources: ${{ steps.run.outputs.retry_sources }}
     env:
       PYTHONPATH: src
       PYTHONUNBUFFERED: "1"
@@ -35,16 +37,10 @@ jobs:
       - run: pip install -r requirements.txt
 
       - name: 이전 수집 기록(DB) 가져오기
-        run: |
-          mkdir -p data
-          if git fetch --depth=1 origin state 2>/dev/null; then
-            git show FETCH_HEAD:postings.db > data/postings.db
-            echo "기존 수집 기록 복원 ($(stat -c %s data/postings.db) bytes)"
-          else
-            echo "state 브랜치 없음: 첫 실행"
-          fi
+        run: bash scripts/state_db.sh restore
 
       - name: 수집 → 엑셀 → 메일
+        id: run
         env:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
@@ -52,11 +48,10 @@ jobs:
           WORK24_API_KEY: ${{ secrets.WORK24_API_KEY }}
           SEND_MAIL: ${{ github.event_name == 'schedule' || inputs.send_mail }}
         run: |
-          if [ "$SEND_MAIL" = "true" ]; then
-            python -m ulsan_jobs run --db data/postings.db --out out
-          else
-            python -m ulsan_jobs run --db data/postings.db --out out --no-mail
-          fi
+          mail=""
+          if [ "$SEND_MAIL" != "true" ]; then mail="--no-mail"; fi
+          python -m ulsan_jobs run --db data/postings.db --out out --retry-list out/retry_sources.txt $mail
+          echo "retry_sources=$(cat out/retry_sources.txt)" >> "$GITHUB_OUTPUT"
 
       - name: 엑셀 보관 (30일)
         if: always()
@@ -72,13 +67,55 @@ jobs:
         if: always() && hashFiles('data/postings.db') != ''
         env:
           GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/state_db.sh save
+
+  # 구·군청 등 일부 사이트는 수집 서버(GitHub 가 배정하는 해외 서버)의 지역에 따라 접속이 막힌다.
+  # 접속 안 된 사이트가 있으면 새 서버를 받아 그 사이트만 한 번 더 수집하고, 새 공고가 있을 때만 보충 메일을 보낸다.
+  catch-up:
+    needs: collect
+    if: needs.collect.outputs.retry_sources != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PYTHONPATH: src
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: 이전 수집 기록(DB) 가져오기
+        run: bash scripts/state_db.sh restore
+
+      - name: 접속 안 된 사이트 다시 수집 → 보충 메일
+        env:
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          WORK24_API_KEY: ${{ secrets.WORK24_API_KEY }}
+          SEND_MAIL: ${{ github.event_name == 'schedule' || inputs.send_mail }}
+          RETRY_SOURCES: ${{ needs.collect.outputs.retry_sources }}
         run: |
-          tmp=$(mktemp -d)
-          cp data/postings.db "$tmp/"
-          cd "$tmp"
-          git init -q -b state
-          git add postings.db
-          git -c user.name="github-actions[bot]" \
-              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-              commit -q -m "수집 기록 $(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')"
-          git push -q -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" state
+          mail=""
+          if [ "$SEND_MAIL" != "true" ]; then mail="--no-mail"; fi
+          python -m ulsan_jobs run --db data/postings.db --out out --catch-up --source $RETRY_SOURCES $mail
+
+      - name: 엑셀 보관 (30일)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-${{ github.run_id }}-catch-up
+          path: out/*.xlsx
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: 수집 기록(DB) 저장
+        if: always() && hashFiles('data/postings.db') != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/state_db.sh save

@@ -16,6 +16,7 @@ HEADER_FONT = Font(bold=True, color="FFFFFF")
 URGENT_FILL = PatternFill("solid", fgColor="F8CBAD")  # D-1 이하
 SOON_FILL = PatternFill("solid", fgColor="FFE699")  # D-3 이하
 PROBLEM_FILL = PatternFill("solid", fgColor="F8CBAD")
+UNREACHABLE_FILL = PatternFill("solid", fgColor="E7E6E6")  # 접속 안 됨 (다음 실행 때 다시 수집)
 LINK_FONT = Font(color="0563C1", underline="single")
 
 POSTING_COLUMNS = [
@@ -107,6 +108,8 @@ def _write_status(ws, results: list[SourceResult]) -> None:
             ws.cell(row=n, column=col, value=value)
         if r.is_problem:
             ws.cell(row=n, column=3).fill = PROBLEM_FILL
+        elif r.is_unreachable:
+            ws.cell(row=n, column=3).fill = UNREACHABLE_FILL
         if r.url:
             ws.cell(row=n, column=8).hyperlink = r.url
             ws.cell(row=n, column=8).font = LINK_FONT
