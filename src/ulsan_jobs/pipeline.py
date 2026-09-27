@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -51,14 +53,38 @@ def collect_all(
     http: Http,
     now: datetime,
     detail_limit: int = 100,
+    time_limit: float = 20 * 60,
+    clock: Callable[[], float] = time.monotonic,
 ) -> list[SourceResult]:
-    """모든 소스를 수집한다. 실패(오류·0건)한 소스는 끝에서 한 번 더 시도한다 (관공서 서버의 일시 장애 대비)."""
+    """모든 소스를 수집한다. 실패(오류·0건)한 소스는 끝에서 한 번 더 시도한다 (관공서 서버의 일시 장애 대비).
+
+    접속이 안 되는 서버가 많은 날에도 메일은 나가야 하므로(작업 제한 30분), 수집이 time_limit 초를
+    넘으면 남은 소스는 건너뛰고 재시도도 하지 않는다.
+    """
+    started = clock()
     budget = {"details": detail_limit}
-    results = [_collect_source(src, rules, store, http, now, budget) for src in sources]
-    for i, src in enumerate(sources):
-        if results[i].state in ("오류", "0건"):
-            log.info("다시 시도: %s (%s)", src.name, results[i].error)
-            results[i] = _collect_source(src, rules, store, http, now, budget)
+
+    def out_of_time() -> bool:
+        return clock() - started > time_limit
+
+    results = []
+    for src in sources:
+        if out_of_time():
+            result = SourceResult(src.id, src.name, src.org_type, src.url or "")
+            result.state, result.error = "오류", f"수집 시간 {time_limit / 60:.0f}분을 넘겨 건너뜀 (다음 실행 때 다시 수집)"
+            results.append(result)
+        else:
+            results.append(_collect_source(src, rules, store, http, now, budget))
+
+    retry = [i for i, r in enumerate(results) if r.state in ("오류", "0건")]
+    if retry and not out_of_time():
+        http.forget_unreachable()  # 앞에서 접속 실패한 서버도 한 번은 다시 기다려 본다
+    for i in retry:
+        if out_of_time():
+            log.warning("수집 시간 %.0f분을 넘겨 나머지 재시도는 건너뜀", time_limit / 60)
+            break
+        log.info("다시 시도: %s (%s)", sources[i].name, results[i].error)
+        results[i] = _collect_source(sources[i], rules, store, http, now, budget)
     return results
 
 

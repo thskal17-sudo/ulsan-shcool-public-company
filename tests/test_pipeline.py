@@ -152,3 +152,66 @@ def test_failed_source_is_retried_once(env, monkeypatch):
     assert states == {"fake": "정상", "broken": "오류"}
     assert FlakyCollector.calls == 2
     assert len(outcome.new) == 2
+
+
+class _Clock:
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        return self.now
+
+
+class _RecordingHttp:
+    def __init__(self):
+        self.forgets = 0
+
+    def forget_unreachable(self):
+        self.forgets += 1
+
+
+def _collect(tmp_path, config, clock, http):
+    from ulsan_jobs.config import load_rules, load_settings
+    from ulsan_jobs.storage import Store
+
+    sources = pipeline.select_sources(load_settings(config).sources, None, 1)  # fake, broken
+    store = Store(tmp_path / "db.sqlite")
+    try:
+        return pipeline.collect_all(sources, load_rules(config), store, http, NOW, time_limit=20 * 60, clock=clock)
+    finally:
+        store.close()
+
+
+def test_retry_pass_forgets_unreachable_hosts(env):
+    # 끝의 재시도에서는 앞에서 접속 실패한 서버도 한 번 더 기다려 본다
+    tmp_path, config, _ = env
+    http = _RecordingHttp()
+    results = _collect(tmp_path, config, _Clock(), http)
+    assert [r.state for r in results] == ["정상", "오류"]
+    assert http.forgets == 1
+
+
+def test_time_limit_skips_remaining_sources_and_retries(env, monkeypatch):
+    # 접속 안 되는 서버가 많아 수집이 오래 걸리면 남은 소스·재시도를 건너뛰고 메일을 보낼 수 있게 한다
+    tmp_path, config, _ = env
+    clock = _Clock()
+    broken_calls = []
+
+    class SlowCollector(FakeCollector):
+        def collect(self):
+            clock.now += 25 * 60
+            return super().collect()
+
+    class CountingBroken(BrokenCollector):
+        def collect(self):
+            broken_calls.append(1)
+            return super().collect()
+
+    monkeypatch.setitem(COLLECTORS, "fake", SlowCollector)
+    monkeypatch.setitem(COLLECTORS, "fake_broken", CountingBroken)
+    http = _RecordingHttp()
+    fake, broken = _collect(tmp_path, config, clock, http)
+
+    assert fake.state == "정상"
+    assert broken.state == "오류" and "20분을 넘겨 건너뜀" in broken.error
+    assert broken_calls == [] and http.forgets == 0
