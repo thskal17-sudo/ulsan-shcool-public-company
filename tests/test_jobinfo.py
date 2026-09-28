@@ -73,3 +73,23 @@ def test_ambiguous_or_sentence_labels_are_ignored():
 def test_long_values_are_capped():
     info = extract_info("교육대상: " + "가" * 100)
     assert len(info["target"]) == 60 and info["target"].endswith("…")
+
+
+def test_school_hiring_period_under_table_header():
+    # 학교 시간강사 공고: '채용기간' 머리 칸 아래 다른 칸들 뒤에 날짜가 온다 (울산여고·대송고 공고문 모양)
+    ulsan_girls = "\n".join([
+        "1. 모집 내용", "교과", "인원", "채용기간", "비고", "국어", "1명",
+        "2026.10.19.(월) ~ 10.23.(금)/5일", "장기재직휴가 대체", "2. 지원 자격", "- 중등교원자격증 소지자",
+    ])
+    assert extract_info(ulsan_girls)["schedule"] == "2026.10.19.(월) ~ 10.23.(금)/5일"
+    daesong = "\n".join([
+        "1. 모집내용", "과목", "채용기간", "생물", "1", "2026. 10. 23.(금)", "~ 2026. 10. 26.(월) (4일)",
+        "화학", "1", "2026. 10. 27.(화)", "~ 2026. 10. 30.(금) (5일)", "2. 응시자격",
+    ])
+    assert extract_info(daesong)["schedule"] == "2026. 10. 23.(금) ~ 2026. 10. 26.(월) (4일)"
+
+
+def test_schedule_search_stops_at_next_section():
+    # 채용기간 칸이 비어 있으면 다음 항목의 접수기간 날짜를 가져오지 않는다
+    text = "채용기간\n추후 안내\n2. 접수기간\n2026. 9. 22. ~ 9. 29."
+    assert "schedule" not in extract_info(text)

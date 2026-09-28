@@ -19,7 +19,7 @@ from .dates import extract_deadline, first_period_end
 from .detail import extends, full_title, looks_truncated, page_text
 from .gangsaitda import TEMPLATE_NAME, build_gangsaitda
 from .http import HostUnreachable, Http, is_connect_failure
-from .jobinfo import extract_info
+from .jobinfo import INFO_VERSION, extract_info
 from .matching import finished_by
 from .mailer import MailConfig, build_message, html_body, send, subject_line, text_body
 from .models import Posting, SourceResult, now_kst
@@ -180,7 +180,8 @@ def _collect_source(
         deadline, info, stored_status = store.detail_state(p.uid)
         need_deadline = is_new and deadline is None
         # 강사잇다 양식용: 마감 전 모집공고는 공고문을 한 번 읽어 수업 일정·대상 등을 찾아 둔다
-        need_info = stored_status == "모집중" and info is None and (deadline is None or deadline >= today)
+        stale = info is None or info.get("v") != INFO_VERSION
+        need_info = stored_status == "모집중" and stale and (deadline is None or deadline >= today)
         if not (need_deadline or need_info):
             continue
         if not tried and budget["details"] > 0:
@@ -206,7 +207,7 @@ def _collect_source(
             if not notice_read:
                 notice = _attachment_text(collector, soup, p, budget)
             info = extract_info(notice, soup.get_text("\n"))
-            store.set_info(p.uid, info)
+            store.set_info(p.uid, {**info, "v": INFO_VERSION})
             log.info("공고문 정보 %s → %s", p.title, info or "못 찾음")
 
     if result_notices:

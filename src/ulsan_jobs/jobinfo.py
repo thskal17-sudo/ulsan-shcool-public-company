@@ -14,6 +14,10 @@ from __future__ import annotations
 import re
 
 
+# 찾는 방법을 고치면 올린다. 저장된 정보의 버전이 다르면 다음 실행 때 공고문을 다시 읽는다
+INFO_VERSION = 2
+
+
 def _words(*words: str) -> str:
     """'위촉기간' → '위\\s*촉\\s*기\\s*간' (공고문은 글자 사이를 띄워 쓰기도 한다)."""
     return "|".join(r"\s*".join(re.escape(ch) for ch in w.replace(" ", "")) for w in words)
@@ -22,8 +26,8 @@ def _words(*words: str) -> str:
 LABELS = {
     "schedule": _words(
         "운영기간", "교육기간", "수업기간", "강의기간", "강좌기간", "위촉기간", "위탁기간", "계약기간",
-        "근무기간", "활동기간", "사업기간", "운영일시", "수업일시", "교육일시", "강의일시",
-        "운영일정", "수업일정", "교육일정",
+        "근무기간", "활동기간", "사업기간", "채용기간", "임용기간", "근무예정기간", "계약예정기간",
+        "운영일시", "수업일시", "교육일시", "강의일시", "운영일정", "수업일정", "교육일정",
     ),
     "hours": _words("수업시간", "운영시간", "교육시간", "강의시간", "근무시간", "수업요일"),
     "target": _words("교육대상", "수업대상", "수강대상", "운영대상", "참여대상", "대상학년", "대상학생"),
@@ -46,6 +50,9 @@ _PATTERNS = {
 _ITEM = re.compile(r"^(?:[-·ㆍ•*◦○▪]|[①-⑳]|\(?\d{1,2}\)|[가나다라마바사아자차카타파하]\.)\s*")
 _HEADING_TAIL = re.compile(r"^(?:및|과|와|등|의|에\s)")  # '1. 모집분야 및 인원' 같은 제목 줄
 _MULTI = {"qualification", "documents"}
+
+_DATED = re.compile(r"(?:19|20)\d{2}\s*[.년]\s*\d{1,2}\s*[.월]\s*\d{1,2}")
+_SECTION = re.compile(r"^\d{1,2}\.\s*\S")  # '2. 지원 자격' 같은 큰 번호 줄
 
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 _APPLY_WORDS = re.compile(r"접수|제출|지원|응모|신청")
@@ -74,6 +81,24 @@ def _is_label_only(line: str) -> bool:
     return found is not None and not found[1]
 
 
+def _schedule_below(lines: list[str], start: int, window: int = 12) -> str | None:
+    """표 머리의 '채용기간' 아래 몇 칸 뒤에 오는 첫 날짜 줄 (다음 줄이 '~ 끝날짜'면 이어 붙임).
+
+        교과 / 인원 / 채용기간 / 비고 / 국어 / 1명 / 2026.10.19.(월) ~ 10.23.(금)
+        채용기간 / 생물 / 1 / 2026. 10. 23.(금) / ~ 2026. 10. 26.(월) (4일)
+    """
+    for j in range(start, min(start + window, len(lines))):
+        line = lines[j]
+        found = _label_of(line)
+        if _SECTION.match(line) or (found and found[0] not in ("schedule", "hours", "headcount", "field")):
+            return None  # 다른 항목으로 넘어감
+        if _DATED.search(line):
+            if "~" not in line and j + 1 < len(lines) and lines[j + 1].startswith("~"):
+                return f"{line} {lines[j + 1]}"
+            return line
+    return None
+
+
 def _raw_fields(lines: list[str]) -> dict[str, str]:
     """항목 이름 → 값 글자 (칸마다 처음 찾은 것)."""
     out: dict[str, str] = {}
@@ -84,6 +109,12 @@ def _raw_fields(lines: list[str]) -> dict[str, str]:
             i += 1
             continue
         key, value = found
+        if key == "schedule" and not value and "schedule" not in out:
+            below = _schedule_below(lines, i + 1)
+            if below:
+                out["schedule"] = below
+                i += 1
+                continue
         if not value:
             # 라벨만 있는 줄이 연달아 나오면 표 머리 칸: 뒤따르는 같은 수의 줄이 차례로 값
             run = [key]

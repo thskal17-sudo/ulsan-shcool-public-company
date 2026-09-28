@@ -142,11 +142,29 @@ def test_pipeline_reads_notice_info_once(tmp_path, rules, monkeypatch):
     posting = next(p for p in store.unreported() if p.post_key == "r")
     assert posting.deadline == date(2026, 10, 2)
     assert posting.title == "방과후 로봇과학 강사 모집 공고"  # 목록에서 잘린 제목은 전체로
-    assert posting.info == {"schedule": "2026.10.6.~12.15.", "target": "초등 3~4학년", "headcount": 1}
+    assert posting.info == {"schedule": "2026.10.6.~12.15.", "target": "초등 3~4학년", "headcount": 1, "v": 2}
     assert InfoBoard.fetched == ["https://example.org/r"]
 
     # 다음 날: 이미 읽은 공고문은 다시 열지 않는다
     InfoBoard.fetched = []
     collect_all([src], rules, store, NoHttp(), now)
     assert InfoBoard.fetched == []
+    store.close()
+
+
+def test_notice_is_read_again_when_extraction_improves(tmp_path, rules, monkeypatch):
+    from ulsan_jobs import pipeline
+
+    monkeypatch.setitem(pipeline.COLLECTORS, "info", InfoBoard)
+    src = Source("info", "정보 게시판", "info", url="https://example.org/list", keyword_filter=False)
+    store = Store(tmp_path / "db.sqlite")
+    now = datetime(2026, 9, 26, 7, 0, tzinfo=KST)
+    collect_all([src], rules, store, NoHttp(), now)
+    uid = next(p.uid for p in store.unreported() if p.post_key == "r")
+    store.set_info(uid, {"qualification": "예전 방식으로 찾은 값"})  # 버전 표시 없는 옛 정보
+
+    InfoBoard.fetched = []
+    collect_all([src], rules, store, NoHttp(), now)
+    assert InfoBoard.fetched == ["https://example.org/r"]
+    assert store.detail_state(uid)[1]["schedule"] == "2026.10.6.~12.15."
     store.close()
