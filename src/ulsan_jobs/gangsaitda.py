@@ -5,7 +5,7 @@ config/gangsaitda_template.xlsx (강사잇다 양식 원본)을 그대로 열어
 
 필수 칸을 공고에서 찾지 못하면
     수업 일정   '원문 공고 참고'
-    상세 내용   원문 제목·분야·모집 분야·접수 마감·원문 링크로 쓴 안내
+    상세 내용   원문 제목·분야·접수 마감·원문 링크로 쓴 안내
     마감일      비우고 '처리' 칸에 '보류' (강사잇다가 그 줄을 올리지 않음. 확인해 채운 뒤 '보류'를 지우면 됨)
 '메모' 칸에는 출처 게시판과 확인할 점을 적는다 (강사잇다는 메모 칸을 무시함).
 """
@@ -55,13 +55,10 @@ def _source_label(source_name: str) -> str:
 
 
 def detail_text(p: Posting) -> str:
-    """상세 내용: 공고에서 찾은 것과 원문 링크로 쓴 안내."""
-    info = p.info or {}
+    """상세 내용: 원문 제목·분야·접수 마감·원문 링크로 쓴 안내."""
     lines = [p.title]
     if p.category and p.category != "기타":
         lines.append(f"분야: {p.category}")
-    if info.get("field"):
-        lines.append(f"모집 분야: {info['field']}")
     if p.deadline:
         lines.append(f"접수 마감: {p.deadline.isoformat()}")
     lines.append("자세한 내용과 지원 방법은 원문 공고를 확인해 주세요.")

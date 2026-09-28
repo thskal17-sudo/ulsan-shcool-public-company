@@ -32,7 +32,7 @@ E-mail: webmaster@ulsan.go.kr
 
 def test_table_layout_from_attachment():
     info = extract_info(NOTICE_TABLE)
-    assert info["field"] == "수영(초급반)"
+    assert "field" not in info  # 모집 분야는 표 칸 맞추기에만 쓴다
     assert info["headcount"] == 2
     assert info["schedule"] == "2026. 10. 1. ~ 2026. 12. 31."
     assert info["qualification"] == "수영 관련 자격증 소지자\n강습 경력 1년 이상인 자"

@@ -1,4 +1,4 @@
-"""공고 본문·첨부 공고문에서 강사잇다 양식에 넣을 칸(수업 일정·대상·인원·자격·서류·이메일·모집 분야)을 찾는다.
+"""공고 본문·첨부 공고문에서 강사잇다 양식에 넣을 칸(수업 일정·대상·인원·자격·서류·이메일)을 찾는다.
 
 공고문은 대개 '라벨: 값' 줄이거나, 표를 글자로 풀면 라벨 칸과 값 칸이 차례로 한 줄씩 나온다.
     ○ 위촉기간: 2026. 10. 1. ~ 12. 31.        라벨과 값이 한 줄
@@ -30,6 +30,7 @@ LABELS = {
     "headcount": _words("모집인원", "선발인원", "채용인원", "위촉인원", "모집예정인원"),
     "qualification": _words("지원자격", "응시자격", "자격요건", "신청자격", "응모자격", "자격기준"),
     "documents": _words("제출서류", "구비서류", "접수서류", "응시서류", "신청서류"),
+    # 모집 분야는 값이 '강사'·'운영 조건'처럼 엉뚱한 경우가 많아 쓰지 않고, 표 머리 칸을 맞추는 데만 쓴다
     "field": _words("모집분야", "모집과목", "모집종목", "모집강좌", "강좌명", "프로그램명", "강의과목", "채용분야"),
 }
 # 값을 모으다가 여기서 멈추는 다른 항목 이름들
@@ -137,8 +138,6 @@ def _clean(raw: dict[str, str]) -> dict:
     for key, limit in (("qualification", 100), ("documents", 100)):
         if raw.get(key):
             info[key] = "\n".join(_cap(part, limit) for part in raw[key].split("\n") if part)
-    if raw.get("field") and not re.fullmatch(r"[\d\s명.,]+", raw["field"]):
-        info["field"] = _cap(raw["field"], 80)
     return info
 
 
@@ -158,7 +157,7 @@ def _email(lines: list[str], strict: bool) -> str | None:
 def extract_info(notice: str | None, page: str | None = None) -> dict:
     """첨부 공고문(notice)을 먼저 보고, 못 찾은 칸만 상세 페이지 글자(page)에서 찾는다.
 
-    돌려주는 칸: schedule, target, headcount(int), qualification, documents, email, field (찾은 것만).
+    돌려주는 칸: schedule, target, headcount(int), qualification, documents, email (찾은 것만).
     """
     notice_lines, page_lines = _lines(notice), _lines(page)
     info = _clean(_raw_fields(page_lines))
