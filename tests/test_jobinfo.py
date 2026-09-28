@@ -1,0 +1,75 @@
+from ulsan_jobs.jobinfo import extract_info
+
+# HWP 공고문을 글자로 풀면 표의 칸이 한 줄씩 나온다
+NOTICE_TABLE = """
+2026년 하반기 울산대공원 수영장 교육강사(프리랜서) 추가 위촉 공고
+1. 모집분야 및 인원
+모집분야
+모집인원
+위촉기간
+수영(초급반)
+2명
+2026. 10. 1. ~ 2026. 12. 31.
+2. 지원자격
+- 수영 관련 자격증 소지자
+- 강습 경력 1년 이상인 자
+3. 접수기간 : 2026. 9. 22.(월) ~ 9. 26.(금)
+4. 제출서류 : 이력서 1부, 자격증 사본 1부
+5. 접수방법 : 이메일 접수 (swim@uic.or.kr)
+"""
+
+PAGE_BULLETS = """
+홈 > 알림마당 > 공지사항
+○ 교육기간: 2026.10.6.~12.15. (10주)
+○ 수업시간: 매주 화·목 14:00~15:30
+○ 교육대상: 초등 3~4학년 20명
+○ 모집인원: 1명
+○ 지원자격: 관련 자격증 소지자
+문의: 052-000-0000
+E-mail: webmaster@ulsan.go.kr
+"""
+
+
+def test_table_layout_from_attachment():
+    info = extract_info(NOTICE_TABLE)
+    assert info["field"] == "수영(초급반)"
+    assert info["headcount"] == 2
+    assert info["schedule"] == "2026. 10. 1. ~ 2026. 12. 31."
+    assert info["qualification"] == "수영 관련 자격증 소지자\n강습 경력 1년 이상인 자"
+    assert info["documents"] == "이력서 1부, 자격증 사본 1부"
+    assert info["email"] == "swim@uic.or.kr"
+
+
+def test_labeled_lines_from_page():
+    info = extract_info(None, PAGE_BULLETS)
+    assert info["schedule"] == "2026.10.6.~12.15. (10주) / 매주 화·목 14:00~15:30"
+    assert info["target"] == "초등 3~4학년 20명"
+    assert info["headcount"] == 1
+    assert info["qualification"] == "관련 자격증 소지자"
+    assert "email" not in info  # 사이트 바닥글 관리자 메일은 접수 이메일이 아님
+
+
+def test_attachment_wins_over_page():
+    info = extract_info("위촉기간: 2026. 11. 1. ~ 11. 30.", PAGE_BULLETS)
+    assert info["schedule"] == "2026. 11. 1. ~ 11. 30."
+    assert info["target"] == "초등 3~4학년 20명"  # 첨부에 없는 칸은 페이지에서
+
+
+def test_spaced_labels_and_values_on_next_line():
+    info = extract_info("위 촉 기 간\n2026. 10. 1.(수) ~ 12. 31.(수)\n모 집 인 원\n○명")
+    assert info["schedule"] == "2026. 10. 1.(수) ~ 12. 31.(수)"
+    assert "headcount" not in info  # 인원이 숫자로 없으면 비움
+
+
+def test_ambiguous_or_sentence_labels_are_ignored():
+    text = "\n".join([
+        "지원자격을 갖춘 자는 누구나 지원할 수 있습니다.",  # 문장 속 낱말
+        "위촉기간 중 결격사유가 발생하면 해촉합니다.",  # 일정 값에 숫자가 없음
+        "모집인원: 과목별 각 1명",  # 과목별 인원은 한 숫자로 못 씀
+    ])
+    assert extract_info(text) == {}
+
+
+def test_long_values_are_capped():
+    info = extract_info("교육대상: " + "가" * 100)
+    assert len(info["target"]) == 60 and info["target"].endswith("…")

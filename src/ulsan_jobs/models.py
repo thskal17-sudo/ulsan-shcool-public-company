@@ -32,6 +32,7 @@ class Posting:
     status: str = "모집중"
     label: str = ""  # 게시판의 구분/분류 값 (예: '방과후강사(관련)') - 강사 공고 판별에 함께 사용
     detail_url: str | None = None  # 마감일을 찾으러 들어갈 상세 페이지 (GET 가능할 때만)
+    info: dict | None = None  # 공고문에서 찾은 수업 일정·대상 등 (jobinfo.extract_info). None = 아직 안 봄
 
     @property
     def uid(self) -> str:

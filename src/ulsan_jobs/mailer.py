@@ -71,6 +71,7 @@ def html_body(
     limit: int = 30,
     *,
     catch_up: bool = False,
+    attachment_note: str = "전체 목록은 첨부 엑셀을 확인하세요.",
 ) -> str:
     problems = [r for r in results if r.is_problem]
     unreachable = [r for r in results if r.is_unreachable]
@@ -80,12 +81,13 @@ def html_body(
             f"<h2 style='margin:0 0 8px'>울산 강사 구인공고 {today.isoformat()} · 보충</h2>",
             f"<p>앞선 수집 때 접속되지 않은 사이트 {len(results)}곳을 다른 수집 서버에서 다시 읽어"
             f" 새로 찾은 공고 <b>{len(new)}</b>건입니다.</p>",
+            f"<p>{escape(attachment_note)}</p>",
         ]
     else:
         parts += [
             f"<h2 style='margin:0 0 8px'>울산 강사 구인공고 {today.isoformat()}</h2>",
-            f"<p>신규 <b>{len(new)}</b>건 · 마감임박(D-3) <b>{len(closing_soon)}</b>건 · 진행중 전체 <b>{active_count}</b>건"
-            " — 전체 목록은 첨부 엑셀을 확인하세요.</p>",
+            f"<p>신규 <b>{len(new)}</b>건 · 마감임박(D-3) <b>{len(closing_soon)}</b>건 · 진행중 전체 <b>{active_count}</b>건</p>",
+            f"<p>{escape(attachment_note)}</p>",
         ]
     if problems:
         items = "".join(f"<li>{escape(short_name(r.name))}: {escape(r.error[:200])}</li>" for r in problems)
@@ -134,11 +136,11 @@ def _table(title: str, postings: list[Posting], today: date, limit: int) -> str:
     )
 
 
-def text_body(today: date, new: list[Posting]) -> str:
+def text_body(today: date, new: list[Posting], attachment_note: str = "전체 목록은 첨부 엑셀을 확인하세요.") -> str:
     lines = [f"울산 강사 구인공고 {today.isoformat()} - 신규 {len(new)}건", ""]
     for p in new:
         lines.append(f"- [{dday_label(p.deadline, today)}] {p.org_name} | {p.title}\n  {p.url}")
-    lines.append("\n전체 목록은 첨부 엑셀을 확인하세요.")
+    lines.append("\n" + attachment_note)
     return "\n".join(lines)
 
 

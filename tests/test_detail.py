@@ -106,3 +106,47 @@ def test_pipeline_recovers_truncated_titles(tmp_path, rules, monkeypatch):
     assert store.title_of(new["b"].uid) == "[남부청소년수련관] 2026년 주말수영 강사(긴급) 위·수탁 모집 공고"
     assert TruncatedBoard.fetched == ["https://example.org/a"]  # 결과공고라 저장 안 된 글만 다시 확인
     store.close()
+
+
+INFO_PAGE = """<div class="view"><h3>방과후 로봇과학 강사 모집 공고</h3><p>○ 교육기간: 2026.10.6.~12.15.</p><p>○ 교육대상: 초등 3~4학년</p>
+<p>○ 모집인원: 1명</p><p>접수기간: 2026. 9. 21. ~ 2026. 10. 2.</p></div>"""
+
+
+class InfoBoard(Collector):
+    fetched: list[str] = []
+
+    def collect(self):
+        return [
+            Posting("info", "방과후 로봇과학 강사 모...", "https://example.org/r", "r",
+                    posted_date=date(2026, 9, 20), detail_url="https://example.org/r"),
+            # 이미 마감된 공고는 공고문을 읽지 않는다
+            Posting("info", "수영 강사 모집", "https://example.org/old", "old",
+                    posted_date=date(2026, 9, 1), deadline=date(2026, 9, 10), detail_url="https://example.org/old"),
+        ]
+
+    def fetch_detail(self, posting):
+        self.fetched.append(posting.detail_url)
+        return page_soup(INFO_PAGE.encode())
+
+
+def test_pipeline_reads_notice_info_once(tmp_path, rules, monkeypatch):
+    from ulsan_jobs import pipeline
+
+    monkeypatch.setitem(pipeline.COLLECTORS, "info", InfoBoard)
+    InfoBoard.fetched = []
+    src = Source("info", "정보 게시판", "info", url="https://example.org/list", keyword_filter=False)
+    store = Store(tmp_path / "db.sqlite")
+    now = datetime(2026, 9, 26, 7, 0, tzinfo=KST)
+
+    collect_all([src], rules, store, NoHttp(), now)
+    posting = next(p for p in store.unreported() if p.post_key == "r")
+    assert posting.deadline == date(2026, 10, 2)
+    assert posting.title == "방과후 로봇과학 강사 모집 공고"  # 목록에서 잘린 제목은 전체로
+    assert posting.info == {"schedule": "2026.10.6.~12.15.", "target": "초등 3~4학년", "headcount": 1}
+    assert InfoBoard.fetched == ["https://example.org/r"]
+
+    # 다음 날: 이미 읽은 공고문은 다시 열지 않는다
+    InfoBoard.fetched = []
+    collect_all([src], rules, store, NoHttp(), now)
+    assert InfoBoard.fetched == []
+    store.close()

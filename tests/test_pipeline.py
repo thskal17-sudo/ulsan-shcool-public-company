@@ -96,8 +96,13 @@ def test_run_builds_report_and_mails(env):
 
     msg = sent[0]
     assert "신규 2건" in msg["Subject"] and "마감임박 1건" in msg["Subject"]
-    attachment = next(msg.iter_attachments())
-    assert attachment.get_filename() == "울산_강사구인_2026-09-26.xlsx"
+    # 메일에는 강사잇다 올리기 양식만 붙는다 (마감 전 공고 전부)
+    [attachment] = list(msg.iter_attachments())
+    assert attachment.get_filename() == "강사잇다_울산_2026-09-26.xlsx"
+    assert "강사잇다 올리기 양식입니다 (마감 전 공고 2건)" in msg.get_body(("html",)).get_content()
+    upload = load_workbook(outcome.upload_path)["공고"]
+    assert [upload.cell(row=r, column=1).value for r in (2, 3)] == ["수영 강사 모집", "방과후 독서논술 강사 모집"]
+    assert upload["D2"].value == "2026-09-28"
 
     wb = load_workbook(outcome.report_path)
     assert wb.sheetnames == ["신규 (2)", "마감임박 (1)", "진행중 전체 (2)", "수집현황"]
@@ -300,7 +305,7 @@ def test_catch_up_mail_has_only_the_new_postings(env):
     assert outcome.mailed and len(sent) == 1
     msg = sent[0]
     assert "보충 신규 2건" in msg["Subject"] and "마감임박" not in msg["Subject"]
-    assert next(msg.iter_attachments()).get_filename() == "울산_강사구인_2026-09-26_보충.xlsx"
+    assert next(msg.iter_attachments()).get_filename() == "강사잇다_울산_2026-09-26_보충.xlsx"
     html = msg.get_body(("html",)).get_content()
     assert "다른 수집 서버에서 다시 읽어" in html and "<h3>마감임박" not in html
 
