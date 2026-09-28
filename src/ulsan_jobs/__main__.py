@@ -46,6 +46,7 @@ def cmd_run(args) -> int:
         print(f"  [{dday_label(p.deadline, outcome.today):>6}] {p.category:<8} {p.org_name or '-':<20} {p.title}")
         print(f"           {p.url}")
     print(f"\n엑셀: {outcome.report_path}")
+    print(f"강사잇다 양식: {outcome.upload_path} (마감 전 공고 {len(outcome.active)}건)")
     if outcome.mailed:
         print("메일: 발송함")
     elif args.no_mail:

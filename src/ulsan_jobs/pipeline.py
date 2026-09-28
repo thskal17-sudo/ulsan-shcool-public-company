@@ -17,7 +17,9 @@ from .collectors import COLLECTORS, NotConfigured
 from .config import DEFAULT_CONFIG_DIR, Rules, Source, load_rules, load_settings
 from .dates import extract_deadline, first_period_end
 from .detail import extends, full_title, looks_truncated, page_text
+from .gangsaitda import TEMPLATE_NAME, build_gangsaitda
 from .http import HostUnreachable, Http, is_connect_failure
+from .jobinfo import INFO_VERSION, extract_info
 from .matching import finished_by
 from .mailer import MailConfig, build_message, html_body, send, subject_line, text_body
 from .models import Posting, SourceResult, now_kst
@@ -37,6 +39,7 @@ class RunOutcome:
     report_path: Path
     mailed: bool = False
     source_names: dict[str, str] = field(default_factory=dict)
+    upload_path: Path | None = None  # 메일에 붙이는 강사잇다 양식 (마감 전 공고 전부)
 
 
 def select_sources(sources: list[Source], only: list[str] | None, max_phase: int) -> list[Source]:
@@ -169,20 +172,43 @@ def _collect_source(
         p.status = status
         p.category = categorize(f"{p.title} {p.label}", p.org_name, rules)
         result.matched += 1
-        if not store.upsert(p, now):
+        is_new = store.upsert(p, now)
+        if is_new:
+            result.new += 1
+        if not (p.detail_url and worth_detail(p, today, rules)):
             continue
-        result.new += 1
-        if p.deadline is None and p.detail_url and worth_detail(p, today, rules):
-            if not tried and budget["details"] > 0:
-                budget["details"] -= 1
-                soup = _fetch_detail(collector, p)
-            if soup is not None:
-                deadline = extract_deadline(page_text(soup), today, anywhere=False)
-                if deadline is None and budget["details"] > 0:
-                    budget["details"] -= 1
-                    deadline = _deadline_from_attachment(collector, soup, p, today)
-                if deadline:
-                    store.set_deadline(p.uid, deadline)
+        deadline, info, stored_status = store.detail_state(p.uid)
+        need_deadline = is_new and deadline is None
+        # 강사잇다 양식용: 마감 전 모집공고는 공고문을 한 번 읽어 수업 일정·대상 등을 찾아 둔다
+        stale = info is None or info.get("v") != INFO_VERSION
+        need_info = stored_status == "모집중" and stale and (deadline is None or deadline >= today)
+        if not (need_deadline or need_info):
+            continue
+        if not tried and budget["details"] > 0:
+            budget["details"] -= 1
+            soup, tried = _fetch_detail(collector, p), True
+        if soup is None:
+            continue  # 못 읽었으면 정보는 비워 두고 다음 실행 때 다시
+        notice: str | None = None
+        notice_read = False
+        if need_deadline:
+            deadline = extract_deadline(page_text(soup), today, anywhere=False)
+            if deadline is None:
+                notice, notice_read = _attachment_text(collector, soup, p, budget), True
+                deadline = _deadline_in_notice(notice, today, p)
+            if deadline:
+                store.set_deadline(p.uid, deadline)
+        if need_info and (deadline is None or deadline >= today):
+            if looks_truncated(p.title):  # 전에 잘린 채 저장된 제목도 이참에 전체로
+                full = full_title(soup, p.title)
+                if full:
+                    p.title = full
+                    store.set_title(p.uid, full)
+            if not notice_read:
+                notice = _attachment_text(collector, soup, p, budget)
+            info = extract_info(notice, soup.get_text("\n"))
+            store.set_info(p.uid, {**info, "v": INFO_VERSION})
+            log.info("공고문 정보 %s → %s", p.title, info or "못 찾음")
 
     if result_notices:
         close_finished(store, src.id, result_notices, today)
@@ -209,20 +235,35 @@ def _fetch_detail(collector, p: Posting):
         return None
 
 
-def _deadline_from_attachment(collector, soup, p: Posting, today: date) -> date | None:
-    """본문에 마감일이 없으면 첨부 공고문(HWP/HWPX/PDF)에서 찾는다."""
+def _attachment_text(collector, soup, p: Posting, budget: dict[str, int]) -> str | None:
+    """상세 페이지의 첨부 공고문(HWP/HWPX/PDF) 글자. 첨부가 없거나 읽지 못하면 None (내려받으면 budget 1 사용)."""
     found = find_attachments(soup, p.detail_url or "", collector.source.options.get("attachment_template"))
-    if not found:
+    if not found or budget["details"] <= 0:
         return None
+    budget["details"] -= 1
     att = found[0]
     try:
         text = extract_text(collector.http.get(att.url).content)
     except Exception as exc:  # noqa: BLE001 - 첨부는 보조 정보라 실패해도 진행
         log.info("첨부 내려받기 실패 %s: %s", att.url, exc)
         return None
-    deadline = (extract_deadline(text, today, anywhere=False) or first_period_end(text, today, p.posted_date)) if text else None
-    log.info("첨부 %s → %s", att.name, deadline or ("글자 없음" if not text else "마감일 못 찾음"))
+    log.info("첨부 %s → %s", att.name, f"글자 {len(text)}자" if text else "글자 없음")
+    return text
+
+
+def _deadline_in_notice(text: str | None, today: date, p: Posting) -> date | None:
+    """본문에 마감일이 없을 때 첨부 공고문에서 찾는다 (표 모양 공고문은 첫 기간의 끝)."""
+    if not text:
+        return None
+    deadline = extract_deadline(text, today, anywhere=False) or first_period_end(text, today, p.posted_date)
+    log.info("첨부 공고문 마감일 %s → %s", p.title, deadline or "못 찾음")
     return deadline
+
+
+def _template(config_dir: Path) -> Path:
+    """강사잇다 양식 원본 (설정 폴더에 없으면 기본 설정 폴더의 것)."""
+    path = config_dir / TEMPLATE_NAME
+    return path if path.exists() else DEFAULT_CONFIG_DIR / TEMPLATE_NAME
 
 
 def worth_detail(p: Posting, today: date, rules: Rules) -> bool:
@@ -275,20 +316,34 @@ def run(
         closing_soon = [
             p for p in active if p.deadline is not None and 0 <= (p.deadline - today).days <= rules.closing_soon_days
         ]
+        suffix = "_보충" if catch_up else ""
+        # 수집현황까지 담은 보고서는 Actions 보관용, 메일에는 강사잇다 올리기 양식을 붙인다
         report_path = build_report(
-            out_dir / f"울산_강사구인_{today.isoformat()}{'_보충' if catch_up else ''}.xlsx",
+            out_dir / f"울산_강사구인_{today.isoformat()}{suffix}.xlsx",
             today, new, closing_soon, active, results, source_names,
         )
-        outcome = RunOutcome(today, results, new, closing_soon, active, report_path, source_names=source_names)
+        upload_path = build_gangsaitda(
+            out_dir / f"강사잇다_울산_{today.isoformat()}{suffix}.xlsx", active, source_names, _template(config_dir)
+        )
+        outcome = RunOutcome(
+            today, results, new, closing_soon, active, report_path, source_names=source_names, upload_path=upload_path
+        )
 
         if send_mail and (new or not catch_up):
+            held = sum(1 for p in active if p.deadline is None)
+            note = f"첨부 파일은 강사잇다 올리기 양식입니다 (마감 전 공고 {len(active)}건" + (
+                f", 그중 마감일을 찾지 못한 {held}건은 '보류' 표시)." if held else ")."
+            )
             cfg = MailConfig.from_env()
             msg = build_message(
                 cfg,
                 subject_line(today, len(new), len(closing_soon), catch_up=catch_up),
-                html_body(today, new, [] if catch_up else closing_soon, len(active), results, catch_up=catch_up),
-                text_body(today, new),
-                report_path,
+                html_body(
+                    today, new, [] if catch_up else closing_soon, len(active), results,
+                    catch_up=catch_up, attachment_note=note,
+                ),
+                text_body(today, new, note),
+                upload_path,
             )
             send(cfg, msg)
             # 오래돼서 신규에서 뺀 글도 함께 '보냄' 처리해서 다음 날 다시 거르지 않게 한다

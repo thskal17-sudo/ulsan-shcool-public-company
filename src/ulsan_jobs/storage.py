@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -27,7 +28,8 @@ CREATE TABLE IF NOT EXISTS postings (
     status        TEXT,
     first_seen_at TEXT NOT NULL,
     last_seen_at  TEXT NOT NULL,
-    reported_at   TEXT
+    reported_at   TEXT,
+    info          TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_postings_reported ON postings(reported_at);
 CREATE TABLE IF NOT EXISTS source_runs (
@@ -60,6 +62,9 @@ class Store:
         self.conn = sqlite3.connect(path)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        columns = {r["name"] for r in self.conn.execute("PRAGMA table_info(postings)")}
+        if "info" not in columns:  # 강사잇다 양식용 칸이 생기기 전의 DB
+            self.conn.execute("ALTER TABLE postings ADD COLUMN info TEXT")
 
     def close(self) -> None:
         self.conn.commit()
@@ -106,6 +111,19 @@ class Store:
     def mark_closed(self, uid: str) -> None:
         """결과공고가 올라와 모집이 끝난 공고로 표시 (신규·진행중에서 빠진다)."""
         self.conn.execute("UPDATE postings SET status = ? WHERE uid = ?", (CLOSED, uid))
+
+    def detail_state(self, uid: str) -> tuple[date | None, dict | None, str]:
+        """저장된 마감일·공고문 정보·상태 (정보가 None 이면 아직 공고문을 안 봄)."""
+        row = self.conn.execute("SELECT deadline, info, status FROM postings WHERE uid = ?", (uid,)).fetchone()
+        if row is None:
+            return None, None, ""
+        return _d(row["deadline"]), json.loads(row["info"]) if row["info"] else None, row["status"] or ""
+
+    def set_info(self, uid: str, info: dict) -> None:
+        self.conn.execute("UPDATE postings SET info = ? WHERE uid = ?", (json.dumps(info, ensure_ascii=False), uid))
+
+    def set_title(self, uid: str, title: str) -> None:
+        self.conn.execute("UPDATE postings SET title = ? WHERE uid = ?", (title, uid))
 
     def set_deadline(self, uid: str, deadline: date) -> None:
         self.conn.execute("UPDATE postings SET deadline = ? WHERE uid = ?", (_iso(deadline), uid))
@@ -155,4 +173,5 @@ def _to_posting(r: sqlite3.Row) -> Posting:
         deadline=_d(r["deadline"]),
         category=r["category"] or "",
         status=r["status"] or "",
+        info=json.loads(r["info"]) if r["info"] else None,
     )
