@@ -213,5 +213,109 @@ def test_time_limit_skips_remaining_sources_and_retries(env, monkeypatch):
     fake, broken = _collect(tmp_path, config, clock, http)
 
     assert fake.state == "정상"
-    assert broken.state == "오류" and "20분을 넘겨 건너뜀" in broken.error
+    assert broken.state == "시간초과" and "20분을 넘겨 건너뜀" in broken.error
+    assert broken.needs_other_server  # 보충 수집 대상
     assert broken_calls == [] and http.forgets == 0
+
+
+# ─────────────────────────────── 실패 설명 · 보충 수집
+
+
+def test_failure_descriptions_are_plain():
+    import requests
+    from urllib3.exceptions import MaxRetryError, NewConnectionError
+
+    from ulsan_jobs.http import HostUnreachable
+
+    def http_error(code):
+        resp = requests.Response()
+        resp.status_code = code
+        return requests.exceptions.HTTPError(response=resp)
+
+    refused = requests.exceptions.ConnectionError(MaxRetryError(None, "/", NewConnectionError(None, "refused")))
+    cases = {
+        requests.exceptions.ConnectTimeout("timed out"): "접속불가",
+        refused: "접속불가",
+        HostUnreachable("x"): "접속불가",
+        http_error(500): "오류",
+        requests.exceptions.ReadTimeout("slow"): "오류",
+        ValueError("표 모양이 다름"): "오류",
+    }
+    for exc, state in cases.items():
+        got_state, message = pipeline.describe_failure(exc)
+        assert got_state == state, exc
+        assert "HTTPSConnectionPool" not in message and "Traceback" not in message
+    assert "HTTP 500" in pipeline.describe_failure(http_error(500))[1]
+    assert "해외 접속 차단" in pipeline.describe_failure(requests.exceptions.ConnectTimeout("t"))[1]
+
+
+class UnreachableCollector(Collector):
+    calls = 0
+
+    def collect(self):
+        import requests
+
+        UnreachableCollector.calls += 1
+        raise requests.exceptions.ConnectTimeout("timed out")
+
+
+def test_unreachable_source_is_retried_and_listed_for_other_server(env, monkeypatch, tmp_path):
+    # 접속 안 되는 소스는 끝에서 한 번 더 시도하고, 그래도 안 되면 다른 서버에서 다시 수집할 목록에 오른다
+    from ulsan_jobs.__main__ import main
+
+    _, config, _ = env
+    UnreachableCollector.calls = 0
+    monkeypatch.setitem(COLLECTORS, "fake_broken", UnreachableCollector)
+    retry_file = tmp_path / "retry.txt"
+    code = main([
+        "--config", str(config), "run", "--no-mail",
+        "--db", str(tmp_path / "db.sqlite"), "--out", str(tmp_path / "out"), "--retry-list", str(retry_file),
+    ])
+    assert code == 0
+    assert UnreachableCollector.calls == 2
+    assert retry_file.read_text(encoding="utf-8") == "broken"
+
+
+def test_catch_up_mails_only_when_something_new(env):
+    tmp_path, config, sent = env
+    # 아침 실행: 'fake' 공고 2건을 메일로 보냄
+    run(tmp_path, config, send_mail=True)
+    assert len(sent) == 1
+
+    # 보충 실행: 같은 소스를 다시 읽어도 새 공고가 없으면 메일을 보내지 않는다
+    outcome = pipeline.run(
+        db_path=tmp_path / "db.sqlite", out_dir=tmp_path / "out", send_mail=True, config_dir=config,
+        now=NOW, only=["fake"], catch_up=True,
+    )
+    assert outcome.new == [] and not outcome.mailed and len(sent) == 1
+
+
+def test_catch_up_mail_has_only_the_new_postings(env):
+    tmp_path, config, sent = env
+    # 아침에 'fake' 가 접속 안 됐다고 치고, 보충 실행에서 처음 읽음
+    outcome = pipeline.run(
+        db_path=tmp_path / "db.sqlite", out_dir=tmp_path / "out", send_mail=True, config_dir=config,
+        now=NOW, only=["fake"], catch_up=True,
+    )
+    assert outcome.mailed and len(sent) == 1
+    msg = sent[0]
+    assert "보충 신규 2건" in msg["Subject"] and "마감임박" not in msg["Subject"]
+    assert next(msg.iter_attachments()).get_filename() == "울산_강사구인_2026-09-26_보충.xlsx"
+    html = msg.get_body(("html",)).get_content()
+    assert "다른 수집 서버에서 다시 읽어" in html and "<h3>마감임박" not in html
+
+
+def test_mail_separates_unreachable_sites_from_real_problems():
+    from ulsan_jobs.mailer import html_body
+    from ulsan_jobs.models import SourceResult
+
+    results = [
+        SourceResult("gojobs", "나라일터 모집공고 (기관명에 '울산' 포함)", state="접속불가", error="서버가 응답하지 않음"),
+        SourceResult("junggu", "중구청 채용공고(새올)", state="접속불가", error="서버가 응답하지 않음"),
+        SourceResult("uic", "울산시설공단 - 강습위탁", state="0건", error="목록에서 글을 하나도 읽지 못함"),
+        SourceResult("ok", "울산도서관 - 공지사항"),
+    ]
+    html = html_body(date(2026, 9, 26), [], [], 0, results)
+    assert "확인이 필요한 사이트 1곳" in html and "울산시설공단 - 강습위탁: 목록에서 글을 하나도 읽지 못함" in html
+    assert "접속 안 된 사이트 2곳" in html and "나라일터 모집공고 · 중구청 채용공고(새올)" in html
+    assert "기관명에" not in html and "울산도서관" not in html

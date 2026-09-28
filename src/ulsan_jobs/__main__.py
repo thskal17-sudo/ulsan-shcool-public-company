@@ -1,6 +1,7 @@
 """명령줄 실행.
 
     python -m ulsan_jobs run [--no-mail] [--db data/postings.db] [--out out] [--source ID ...]
+                             [--retry-list FILE] [--catch-up]
     python -m ulsan_jobs check-source ID [ID ...]   # 소스만 시험 수집 (DB·메일 없음)
     python -m ulsan_jobs send-test-mail             # 메일 설정 확인
 """
@@ -30,7 +31,11 @@ def cmd_run(args) -> int:
         config_dir=Path(args.config),
         only=args.source or None,
         max_phase=args.max_phase,
+        catch_up=args.catch_up,
     )
+    if args.retry_list:
+        retry = [r.source_id for r in outcome.results if r.needs_other_server]
+        Path(args.retry_list).write_text(" ".join(retry), encoding="utf-8")
     print(f"\n=== 수집 결과 {outcome.today} ===")
     for r in outcome.results:
         print(f"[{r.state:^5}] {r.name:<40} 목록 {r.fetched:>3} · 강사 {r.matched:>3} · 신규 {r.new:>3} {r.error}")
@@ -41,7 +46,12 @@ def cmd_run(args) -> int:
         print(f"  [{dday_label(p.deadline, outcome.today):>6}] {p.category:<8} {p.org_name or '-':<20} {p.title}")
         print(f"           {p.url}")
     print(f"\n엑셀: {outcome.report_path}")
-    print("메일: " + ("발송함" if outcome.mailed else "발송 안 함 (--no-mail)"))
+    if outcome.mailed:
+        print("메일: 발송함")
+    elif args.no_mail:
+        print("메일: 발송 안 함 (--no-mail)")
+    else:
+        print("메일: 새 공고가 없어 보내지 않음 (보충 수집)")
     return 0
 
 
@@ -112,6 +122,12 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--no-mail", action="store_true", help="메일을 보내지 않음 (신규 표시도 유지)")
     p_run.add_argument("--source", nargs="*", help="이 소스만 수집")
     p_run.add_argument("--max-phase", type=int, default=None, help="이 단계까지의 소스 수집 (기본: sources.yaml 의 max_phase)")
+    p_run.add_argument(
+        "--retry-list", default=None, help="다른 서버에서 다시 수집할 소스 id(접속불가·시간초과)를 이 파일에 공백으로 적음"
+    )
+    p_run.add_argument(
+        "--catch-up", action="store_true", help="보충 수집: --source 소스만 다시 수집하고 새 공고가 있을 때만 메일"
+    )
     p_run.set_defaults(func=cmd_run)
 
     p_check = sub.add_parser("check-source", help="소스 시험 수집")

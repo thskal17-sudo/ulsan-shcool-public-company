@@ -9,13 +9,15 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
 
+import requests
+
 from .attachments import extract_text, find_attachments
 from .classify import categorize, judge
 from .collectors import COLLECTORS, NotConfigured
 from .config import DEFAULT_CONFIG_DIR, Rules, Source, load_rules, load_settings
 from .dates import extract_deadline, first_period_end
 from .detail import extends, full_title, looks_truncated, page_text
-from .http import Http
+from .http import HostUnreachable, Http, is_connect_failure
 from .matching import finished_by
 from .mailer import MailConfig, build_message, html_body, send, subject_line, text_body
 from .models import Posting, SourceResult, now_kst
@@ -71,12 +73,12 @@ def collect_all(
     for src in sources:
         if out_of_time():
             result = SourceResult(src.id, src.name, src.org_type, src.url or "")
-            result.state, result.error = "오류", f"수집 시간 {time_limit / 60:.0f}분을 넘겨 건너뜀 (다음 실행 때 다시 수집)"
+            result.state, result.error = "시간초과", f"수집 시간 {time_limit / 60:.0f}분을 넘겨 건너뜀"
             results.append(result)
         else:
             results.append(_collect_source(src, rules, store, http, now, budget))
 
-    retry = [i for i, r in enumerate(results) if r.state in ("오류", "0건")]
+    retry = [i for i, r in enumerate(results) if r.state in ("오류", "0건", "접속불가")]
     if retry and not out_of_time():
         http.forget_unreachable()  # 앞에서 접속 실패한 서버도 한 번은 다시 기다려 본다
     for i in retry:
@@ -86,6 +88,23 @@ def collect_all(
         log.info("다시 시도: %s (%s)", sources[i].name, results[i].error)
         results[i] = _collect_source(sources[i], rules, store, http, now, budget)
     return results
+
+
+def describe_failure(exc: Exception) -> tuple[str, str]:
+    """수집 실패를 메일·엑셀에 보일 상태와 짧은 설명으로 바꾼다 (자세한 오류는 실행 로그에 남음)."""
+    if isinstance(exc, HostUnreachable):
+        return "접속불가", "같은 서버가 앞서 응답하지 않아 건너뜀"
+    if isinstance(exc, requests.exceptions.ConnectionError) and is_connect_failure(exc):
+        return "접속불가", "서버가 응답하지 않음 (해외 접속 차단 또는 일시 장애)"
+    if isinstance(exc, requests.exceptions.HTTPError) and exc.response is not None:
+        return "오류", f"서버가 오류 응답을 보냄 (HTTP {exc.response.status_code})"
+    if isinstance(exc, requests.exceptions.Timeout):
+        return "오류", "서버 응답이 너무 느림"
+    if isinstance(exc, requests.exceptions.SSLError):
+        return "오류", "보안 연결(인증서) 실패"
+    if isinstance(exc, requests.exceptions.ConnectionError):
+        return "오류", "연결이 도중에 끊김"
+    return "오류", f"목록을 읽다가 오류 ({type(exc).__name__}: {exc})"[:200]
 
 
 def _collect_source(
@@ -112,7 +131,7 @@ def _collect_source(
     except Exception as exc:  # noqa: BLE001 - 한 소스 실패가 전체를 멈추지 않게 한다
         log.warning("수집 실패 %s: %s", src.id, exc)
         log.debug("상세", exc_info=True)
-        result.state, result.error = "오류", f"{type(exc).__name__}: {exc}"[:300]
+        result.state, result.error = describe_failure(exc)
         return result
 
     result.fetched = len(items)
@@ -230,7 +249,10 @@ def run(
     max_phase: int | None = None,
     now: datetime | None = None,
     http: Http | None = None,
+    catch_up: bool = False,
 ) -> RunOutcome:
+    """catch_up: 앞선 실행에서 접속 안 된 소스(only)를 다른 서버에서 다시 수집하는 보충 실행.
+    새 공고가 있을 때만 '보충' 메일을 보낸다 (마감임박 목록은 앞선 메일에 이미 있음)."""
     settings = load_settings(config_dir)
     rules = load_rules(config_dir)
     now = now or now_kst()
@@ -254,17 +276,17 @@ def run(
             p for p in active if p.deadline is not None and 0 <= (p.deadline - today).days <= rules.closing_soon_days
         ]
         report_path = build_report(
-            out_dir / f"울산_강사구인_{today.isoformat()}.xlsx",
+            out_dir / f"울산_강사구인_{today.isoformat()}{'_보충' if catch_up else ''}.xlsx",
             today, new, closing_soon, active, results, source_names,
         )
         outcome = RunOutcome(today, results, new, closing_soon, active, report_path, source_names=source_names)
 
-        if send_mail:
+        if send_mail and (new or not catch_up):
             cfg = MailConfig.from_env()
             msg = build_message(
                 cfg,
-                subject_line(today, len(new), len(closing_soon)),
-                html_body(today, new, closing_soon, len(active), results),
+                subject_line(today, len(new), len(closing_soon), catch_up=catch_up),
+                html_body(today, new, [] if catch_up else closing_soon, len(active), results, catch_up=catch_up),
                 text_body(today, new),
                 report_path,
             )
