@@ -467,23 +467,13 @@ def run_camp(
         raw_by_no = {str(i.get("bidNtceNo") or ""): i for i in raw}
         bids = latest_per_notice([to_bid(i) for i in raw])
         diag: dict = {"begin": begin.isoformat(), "list_region_fields": {}}
-        # 진단: 목록의 참가제한 여부(bidPrtcptLmtYn) 분포와, 제한이 있는 공고의 참가가능지역 응답 샘플
+        # 진단: 목록의 참가제한 여부(bidPrtcptLmtYn) 분포. 제한 공고는 참가가능지역 API 가 지역명을 돌려줌
+        # (9/29 확인: 서울 제한 공고 → ['서울특별시'], 제한 없는 공고 → 0건)
         flags: dict[str, int] = {}
         for i in raw:
             flag = str(i.get("bidPrtcptLmtYn") or "-")
             flags[flag] = flags.get(flag, 0) + 1
         diag["bidPrtcptLmtYn"] = flags
-        diag["raw_keys"] = sorted(raw[0].keys()) if raw else []
-        limited = []
-        for i in raw:
-            if str(i.get("bidPrtcptLmtYn")) == "Y" and len(limited) < 2:
-                try:
-                    names = client.regions(str(i.get("bidNtceNo")), str(i.get("bidNtceOrd") or ""))
-                except Exception as exc:  # noqa: BLE001
-                    names = [f"오류: {exc}"]
-                limited.append({"bid_no": i.get("bidNtceNo"), "title": i.get("bidNtceNm"), "regions": names,
-                                "fields": {k: v for k, v in i.items() if "Rgn" in k or "rgn" in k or "Lmt" in k}})
-        diag["limited_samples"] = limited
         out = CampOutcome(now=now, scanned=len(bids))
 
         for b in bids:
@@ -521,7 +511,13 @@ def run_camp(
 
         order = {t: i for i, t in enumerate(TIERS)}
         # 키워드 설정을 바꾸면 아직 안 알린 공고에도 바로 적용되게 다시 거른다
-        pending = [b for b in store.unreported() if b.tier in TIERS and matches(b.title, cfg)]
+        # 마감이 지난 공고, 마감일을 모르는데 오래된 공고(직찰 등)는 알리지 않는다
+        stale = now_naive - timedelta(days=cfg.first_lookback_days + 4)
+        pending = [
+            b for b in store.unreported()
+            if b.tier in TIERS and matches(b.title, cfg)
+            and (b.close_at >= now_naive if b.close_at else (b.posted_at is None or b.posted_at >= stale))
+        ]
         out.new = sorted(pending, key=lambda b: (order.get(b.tier, 9), b.close_at or datetime.max))
         store.log_run(out, diag)
         store.commit()
