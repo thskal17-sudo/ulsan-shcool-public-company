@@ -1,6 +1,7 @@
-name: 캠프 수주 공고 (나라장터)
+name: 캠프·교육 수주 공고 (나라장터·S2B)
 
-# 나라장터 용역 입찰공고 중 진로·취업·창업 캠프/교육 운영 공고를 모아 새 공고가 있을 때만 메일로 보낸다.
+# 나라장터 용역 입찰공고와 S2B 학교장터 견적요청 중 진로·취업·창업 캠프와 교육 운영 공고를 모아
+# 새 공고가 있을 때만 메일로 보낸다.
 # 강사 공고 수집(daily.yml)과 같은 DB(state 브랜치)를 쓰므로 같은 concurrency 그룹으로 차례대로 실행한다.
 on:
   schedule:
@@ -9,6 +10,8 @@ on:
     # 두 번째 실행은 첫 실행 뒤에 새로 올라온 공고가 있을 때만 메일을 보낸다 (이미 알린 공고는 다시 안 보냄).
     - cron: "23 17 * * *" # 02:23 KST
     - cron: "23 20 * * *" # 05:23 KST (예비)
+    # S2B 학교 견적은 마감이 1~3일로 짧아서 낮에 한 번 더 본다 (새 공고가 있을 때만 메일)
+    - cron: "17 4 * * *" # 13:17 KST
   workflow_dispatch:
     inputs:
       send_mail:
@@ -51,7 +54,7 @@ jobs:
       - name: 이전 수집 기록(DB) 가져오기
         run: bash scripts/state_db.sh restore
 
-      - name: 나라장터 공고 수집 → 메일
+      - name: 나라장터·S2B 공고 수집 → 메일
         env:
           G2B_API_KEY: ${{ secrets.G2B_API_KEY }}
           SMTP_USER: ${{ secrets.SMTP_USER }}

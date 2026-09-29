@@ -4,13 +4,14 @@
                              [--retry-list FILE] [--catch-up] [--once-daily]
     python -m ulsan_jobs check-source ID [ID ...]   # 소스만 시험 수집 (DB·메일 없음)
     python -m ulsan_jobs send-test-mail             # 메일 설정 확인
-    python -m ulsan_jobs camp [--no-mail] [--days N] # 나라장터 캠프 수주 공고 (G2B_API_KEY 필요)
+    python -m ulsan_jobs camp [--no-mail] [--days N] # 캠프·교육 수주 공고: 나라장터(G2B_API_KEY) + S2B
     python -m ulsan_jobs briefing [--no-mail] [--force] # 오늘의 브리핑 (BRIEFING_TO 필요)
 """
 from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -111,16 +112,23 @@ def cmd_camp(args) -> int:
             recheck=args.recheck,
         )
     except G2BError as exc:
-        print(f"캠프 수주 공고: {exc}")
+        print(f"캠프·교육 수주 공고: {exc}")
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            print(f"::error title=캠프·교육 수주 실패::{exc}")
         return 1
-    print(f"\n=== 캠프 수주 공고 {out.now:%Y-%m-%d %H:%M} ===")
-    print(f"용역 공고 {out.scanned}건 · 키워드 일치 {out.matched}건 · 새 공고 {len(out.new)}건 · API 호출 {out.calls}회")
+    print(f"\n=== 캠프·교육 수주 공고 {out.now:%Y-%m-%d %H:%M} ===")
+    print(f"나라장터 용역 공고 {out.scanned}건 · 키워드 일치 {out.matched}건 · API 호출 {out.calls}회")
+    print(f"S2B 학교 용역 견적 {out.s2b_scanned}건 · 키워드 일치 {out.s2b_matched}건 · 요청 {out.s2b_calls}회")
+    print(f"새 공고 {len(out.new)}건")
+    for err in out.errors:
+        print(f"  ⚠ 읽지 못함: {err}")
     if out.methods:
         print("키워드 공고의 계약방법: " + ", ".join(f"{k} {v}" for k, v in sorted(out.methods.items())))
     for b in out.new:
         close = f"{b.close_at:%m/%d %H:%M}" if b.close_at else "원문확인"
         price = f"{b.price:,}원({b.price_label})" if b.price else "-"
-        print(f"  [{b.tier}] ~{close} | {b.demand_org or b.org} | {b.title}")
+        tag = "[교육] " if b.topic == "교육" else ""
+        print(f"  [{b.tier}] ~{close} | {b.source} | {b.demand_org or b.org} | {tag}{b.title}")
         print(f"          {b.method or '-'} | {price} | 참가지역 {b.region_text} | {b.url}")
     if out.closing_soon:
         print(f"마감임박 {len(out.closing_soon)}건")
@@ -132,6 +140,19 @@ def cmd_camp(args) -> int:
         print("메일: 발송 안 함 (--no-mail)")
     else:
         print("메일: 새 공고가 없어 보내지 않음")
+    if os.environ.get("GITHUB_ACTIONS") == "true":  # 실행 기록 첫 화면(요약)에 결과를 남긴다
+        counts = {t: sum(1 for b in out.new if b.tier == t) for t in ("바로지원", "검토", "참고")}
+        mail = "발송함" if out.mailed else "안 보냄(--no-mail)" if args.no_mail else "새 공고 없음"
+        summary = (f"나라장터 {out.scanned}건 중 {out.matched}건 · S2B {out.s2b_scanned}건 중 {out.s2b_matched}건 일치"
+                   f" · 새 공고 {len(out.new)}건 (바로지원 {counts['바로지원']} · 검토 {counts['검토']}"
+                   f" · 참고 {counts['참고']}) · 메일 {mail}")
+        print(f"::notice title=캠프·교육 수주 결과::{summary}")
+        lines = [f"[{b.tier}] {b.source} {b.demand_org or b.org} | {'[교육] ' if b.topic == '교육' else ''}{b.title}"
+                 f" | {b.region_text}" for b in out.new[:25]]
+        if lines:
+            print("::notice title=새 공고 (앞 25건)::" + "%0A".join(x.replace("%", "%25") for x in lines))
+        for err in out.errors:
+            print(f"::warning title=읽지 못한 곳::{err}")
     return 0
 
 
@@ -216,7 +237,7 @@ def main(argv: list[str] | None = None) -> int:
     p_check.add_argument("ids", nargs="+")
     p_check.set_defaults(func=cmd_check_source)
 
-    p_camp = sub.add_parser("camp", help="나라장터 캠프 수주 공고 수집 → 메일")
+    p_camp = sub.add_parser("camp", help="캠프·교육 수주 공고 수집(나라장터·S2B) → 메일")
     p_camp.add_argument("--db", default="data/postings.db")
     p_camp.add_argument("--no-mail", action="store_true", help="메일을 보내지 않음 (새 공고 표시도 유지)")
     p_camp.add_argument("--days", type=int, default=None, help="최근 며칠치 공고를 볼지 (기본: config/camp.yaml)")

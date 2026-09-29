@@ -201,9 +201,13 @@ def read_camp_db(path: Path, today: date, soon_days: int) -> CampSummary:
         for r in conn.execute("SELECT * FROM camp_bids WHERE tier IN ('바로지원', '검토', '참고')"):
             close = datetime.fromisoformat(r["close_at"]) if r["close_at"] else None
             price = f"{r['price'] // 10_000:,}만원" if r["price"] else ""
-            item = Item(title=r["title"], org=r["demand_org"] or r["org"] or "", url=r["url"] or "",
+            keys = r.keys()
+            source = (r["source"] if "source" in keys else None) or "나라장터"
+            tag = "[교육] " if "topic" in keys and r["topic"] == "교육" else ""
+            item = Item(title=tag + r["title"], org=r["demand_org"] or r["org"] or "", url=r["url"] or "",
                         deadline=close.date() if close else None,
-                        deadline_text=f"{close:%m/%d %H:%M}" if close else "", note=price, category=r["tier"])
+                        deadline_text=f"{close:%m/%d %H:%M}" if close else "",
+                        note=" · ".join(x for x in (source, price) if x), category=r["tier"])
             if _kst_date(r["reported_at"]) == today:
                 {"바로지원": out.go, "검토": out.review, "참고": out.ref}[r["tier"]].append(item)
             elif (r["reported_at"] and r["tier"] in ("바로지원", "검토") and item.deadline
@@ -334,14 +338,15 @@ def html_body(b: Briefing, limit: int = 15) -> str:
 
     # 1. 캠프 수주
     c = b.camp
-    parts.append("<h3 style='margin:18px 0 4px;border-bottom:2px solid #1f4e78'>🏫 캠프 수주 (나라장터)</h3>")
+    parts.append("<h3 style='margin:18px 0 4px;border-bottom:2px solid #1f4e78'>🏫 캠프·교육 수주 (나라장터·S2B)</h3>")
     if not c.ready and not (c.go or c.review or c.ref):
         parts.append("<p style='color:#888'>오늘 수집 전</p>")
     else:
-        parts.append(_list("★ 바로지원 (부산 참가 가능 · 소액/수의)", c.go, t, limit))
+        parts.append(_list("★ 바로지원 (부산 업체가 낼 수 있는 소액·수의 견적)", c.go, t, limit))
         parts.append(_list("검토 (금액이 큰 입찰 등)", c.review, t, min(limit, 5)))
         if c.ref:
-            parts.append(f"<p style='margin:4px 0;color:#888'>참고(다른 지역 한정) {len(c.ref)}건은 캠프 수주 메일에 있습니다.</p>")
+            parts.append(f"<p style='margin:4px 0;color:#888'>참고(다른 지역·지정 업체 한정) {len(c.ref)}건은"
+                         " 캠프·교육 수주 메일에 있습니다.</p>")
         if c.closing:
             parts.append(_list("마감임박 (이미 알린 공고)", _by_deadline(c.closing), t, limit))
 

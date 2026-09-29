@@ -1,4 +1,5 @@
-"""캠프 수주 공고: 나라장터 용역 입찰공고에서 진로·취업·창업 캠프/교육 운영 공고를 골라 메일로 보낸다.
+"""캠프·교육 수주 공고: 나라장터 용역 입찰공고와 S2B 학교장터 견적요청에서 진로·취업·창업 캠프와
+교육 운영 공고를 골라 메일로 보낸다. (S2B 수집은 s2b.py)
 
 조달청_나라장터 입찰공고정보서비스 (공공데이터포털 15129394)
     목록  GET {BASE}/getBidPblancListInfoServc?inqryDiv=1&inqryBgnDt=YYYYMMDDHHMM&inqryEndDt=...&type=json
@@ -11,7 +12,11 @@
 등급
     바로지원  참가 가능 지역(부산 또는 제한 없음) + (수의계약 또는 추정가격 small_max 이하)
     검토      참가 가능 지역이지만 금액이 큰 입찰
-    참고      다른 지역 업체만 참가 가능 (견적 기준·과업 참고용)
+    참고      다른 지역 업체나 학교가 정한 업체만 참가 가능 (견적 기준·과업 참고, 영업 대상)
+
+분야 (공고명으로 판정, config/camp.yaml)
+    진로·취업·창업  include 단어, 또는 include_with 조합('캠프' + 직업·진학·꿈…)
+    교육            education 단어('교육', 기관·시설 이름 속 '교육'은 빼고 봄)
 
 환경변수 G2B_API_KEY: 공공데이터포털 일반 인증키 (Decoding·Encoding 어느 쪽이든 됨)
 """
@@ -47,7 +52,13 @@ TIER_GO = "바로지원"
 TIER_REVIEW = "검토"
 TIER_REF = "참고"
 TIER_CANCELED = "취소"
+TIER_SKIP = "제외"  # 저장만 하고 알리지 않음 (다시 상세 조회하지 않으려고)
 TIERS = (TIER_GO, TIER_REVIEW, TIER_REF)
+TOPIC_CORE = "진로·취업·창업"
+TOPIC_EDU = "교육"
+TOPICS = (TOPIC_CORE, TOPIC_EDU)
+SOURCE_G2B = "나라장터"
+SOURCE_S2B = "S2B"
 WEEKDAYS = "월화수목금토일"
 
 SCHEMA = """
@@ -94,6 +105,10 @@ class CampConfig:
     lookback_days: int = 2
     first_lookback_days: int = 10
     closing_soon_days: int = 3
+    include_with: dict[str, list[str]] = field(default_factory=dict)
+    edu_words: list[str] = field(default_factory=list)
+    edu_ignore: list[str] = field(default_factory=list)
+    s2b: dict = field(default_factory=dict)
 
 
 def load_camp_config(config_dir: Path = DEFAULT_CONFIG_DIR) -> CampConfig:
@@ -106,6 +121,10 @@ def load_camp_config(config_dir: Path = DEFAULT_CONFIG_DIR) -> CampConfig:
         lookback_days=int(data.get("lookback_days", 2)),
         first_lookback_days=int(data.get("first_lookback_days", 10)),
         closing_soon_days=int(data.get("closing_soon_days", 3)),
+        include_with={str(k): [str(w) for w in (v or [])] for k, v in (data.get("include_with") or {}).items()},
+        edu_words=[str(w) for w in (data.get("education") or {}).get("words", [])],
+        edu_ignore=[str(w) for w in (data.get("education") or {}).get("ignore", [])],
+        s2b=dict(data.get("s2b") or {}),
     )
 
 
@@ -125,6 +144,8 @@ class Bid:
     url: str = ""
     regions: list[str] | None = None  # 참가가능지역. [] = 제한 없음, None = 모름
     tier: str = ""
+    source: str = SOURCE_G2B
+    topic: str = ""  # TOPIC_CORE / TOPIC_EDU
 
     @property
     def is_sole_source(self) -> bool:
@@ -144,11 +165,27 @@ def _squash(text: str) -> str:
     return re.sub(r"\s+", "", text or "")
 
 
-def matches(title: str, cfg: CampConfig) -> bool:
+def topic_of(title: str, cfg: CampConfig) -> str | None:
+    """공고명의 분야. 수집 대상이 아니면 None."""
     t = _squash(title)
-    if not any(_squash(w) in t for w in cfg.include):
-        return False
-    return not any(_squash(w) in t for w in cfg.exclude)
+    if any(_squash(w) in t for w in cfg.exclude):
+        return None
+    if any(_squash(w) in t for w in cfg.include):
+        return TOPIC_CORE
+    for word, mates in cfg.include_with.items():
+        if _squash(word) in t and any(_squash(m) in t for m in mates):
+            return TOPIC_CORE
+    if cfg.edu_words:
+        rest = t
+        for w in sorted((_squash(w) for w in cfg.edu_ignore), key=len, reverse=True):
+            rest = rest.replace(w, "/")
+        if any(_squash(w) in rest for w in cfg.edu_words):
+            return TOPIC_EDU
+    return None
+
+
+def matches(title: str, cfg: CampConfig) -> bool:
+    return topic_of(title, cfg) is not None
 
 
 def region_ok(regions: list[str] | None, cfg: CampConfig) -> bool | None:
@@ -346,13 +383,19 @@ class CampStore:
         self.conn = sqlite3.connect(path)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        cols = {r[1] for r in self.conn.execute("PRAGMA table_info(camp_bids)")}
+        for col in ("source", "topic"):  # 9/29 추가된 칸 (기존 DB 는 나라장터·진로 분야로 본다)
+            if col not in cols:
+                self.conn.execute(f"ALTER TABLE camp_bids ADD COLUMN {col} TEXT")
 
     def close(self) -> None:
         self.conn.commit()
         self.conn.close()
 
-    def is_empty(self) -> bool:
-        return self.conn.execute("SELECT 1 FROM camp_bids LIMIT 1").fetchone() is None
+    def is_empty(self, source: str = SOURCE_G2B) -> bool:
+        return self.conn.execute(
+            "SELECT 1 FROM camp_bids WHERE COALESCE(source, ?) = ? LIMIT 1", (SOURCE_G2B, source)
+        ).fetchone() is None
 
     def known(self, bid_no: str) -> sqlite3.Row | None:
         return self.conn.execute("SELECT * FROM camp_bids WHERE bid_no = ?", (bid_no,)).fetchone()
@@ -362,20 +405,20 @@ class CampStore:
         values = (
             b.bid_ord, b.title, b.org, b.demand_org, _iso(b.posted_at), _iso(b.close_at), b.price, b.price_label,
             b.method, json.dumps(b.regions, ensure_ascii=False) if b.regions is not None else None, b.tier,
-            b.notice_kind, b.url,
+            b.notice_kind, b.url, b.source, b.topic,
         )
         if row is None:
             self.conn.execute(
                 """INSERT INTO camp_bids (bid_ord, title, org, demand_org, posted_at, close_at, price, price_label,
-                       method, regions, tier, notice_kind, url, bid_no, first_seen_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       method, regions, tier, notice_kind, url, source, topic, bid_no, first_seen_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (*values, b.bid_no, now.isoformat(timespec="seconds")),
             )
         else:
             self.conn.execute(
                 """UPDATE camp_bids SET bid_ord = ?, title = ?, org = ?, demand_org = ?, posted_at = ?, close_at = ?,
                        price = ?, price_label = ?, method = ?, regions = COALESCE(?, regions), tier = ?,
-                       notice_kind = ?, url = ? WHERE bid_no = ?""",
+                       notice_kind = ?, url = ?, source = ?, topic = ? WHERE bid_no = ?""",
                 (*values, b.bid_no),
             )
 
@@ -425,7 +468,13 @@ def _row_to_bid(r: sqlite3.Row) -> Bid:
         url=r["url"] or "",
         regions=json.loads(r["regions"]) if r["regions"] else None,
         tier=r["tier"] or "",
+        source=_col(r, "source") or SOURCE_G2B,
+        topic=_col(r, "topic") or "",
     )
+
+
+def _col(r: sqlite3.Row, name: str):
+    return r[name] if name in r.keys() else None
 
 
 # ---------------------------------------------------------------- 실행
@@ -434,14 +483,75 @@ def _row_to_bid(r: sqlite3.Row) -> Bid:
 @dataclass
 class CampOutcome:
     now: datetime
-    scanned: int = 0  # 기간 안 용역 공고 수
-    matched: int = 0  # 키워드에 맞은 공고 수
+    scanned: int = 0  # 기간 안 나라장터 용역 공고 수
+    matched: int = 0  # 그중 키워드에 맞은 공고 수
     new: list[Bid] = field(default_factory=list)
     closing_soon: list[Bid] = field(default_factory=list)
     calls: int = 0
     region_errors: int = 0
     methods: dict[str, int] = field(default_factory=dict)  # 키워드 공고의 계약방법 분포 (진단용)
+    s2b_scanned: int = 0  # 기간 안 S2B 용역 견적요청 수
+    s2b_matched: int = 0
+    s2b_calls: int = 0
+    errors: list[str] = field(default_factory=list)  # 수집이 실패한 곳 (메일 아래에 표시)
     mailed: bool = False
+
+
+def _collect_g2b(store: "CampStore", cfg: CampConfig, now: datetime, client: "G2BClient | None",
+                 lookback_days: int | None, recheck: bool, out: CampOutcome, diag: dict) -> None:
+    now_naive = now.replace(tzinfo=None)  # API 시각은 한국 시간(시간대 표기 없음)
+    days = lookback_days or (cfg.first_lookback_days if store.is_empty(SOURCE_G2B) else cfg.lookback_days)
+    begin = (now_naive - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
+    client = client or G2BClient(Http(min_interval=0.3, max_seconds=90), service_key())
+    try:
+        raw = client.list_services(begin, now_naive)
+    finally:
+        out.calls = client.calls
+    raw_by_no = {str(i.get("bidNtceNo") or ""): i for i in raw}
+    bids = latest_per_notice([to_bid(i) for i in raw])
+    diag.update({"begin": begin.isoformat(), "list_region_fields": {}})
+    # 진단: 목록의 참가제한 여부(bidPrtcptLmtYn) 분포. 제한 공고는 참가가능지역 API 가 지역명을 돌려줌
+    # (9/29 확인: 서울 제한 공고 → ['서울특별시'], 제한 없는 공고 → 0건)
+    flags: dict[str, int] = {}
+    for i in raw:
+        flag = str(i.get("bidPrtcptLmtYn") or "-")
+        flags[flag] = flags.get(flag, 0) + 1
+    diag["bidPrtcptLmtYn"] = flags
+    out.scanned = len(bids)
+
+    for b in bids:
+        topic = topic_of(b.title, cfg)
+        if topic is None:
+            continue
+        b.topic = topic
+        out.matched += 1
+        out.methods[b.method or "(없음)"] = out.methods.get(b.method or "(없음)", 0) + 1
+        if len(diag["list_region_fields"]) < 5:  # 목록 응답에 지역 제한 칸이 있는지 진단
+            fields = {k: v for k, v in raw_by_no.get(b.bid_no, {}).items()
+                      if re.search(r"rgn|Rgn|lmt|Lmt|Lcl|lcl", k) and v not in (None, "")}
+            diag["list_region_fields"][b.bid_no] = fields
+        row = store.known(b.bid_no)
+        if "취소" in b.notice_kind:
+            if row is not None:  # 이미 알린 공고가 취소되면 마감임박 목록에서 빠지게 표시만 바꾼다
+                b.tier = TIER_CANCELED
+                store.save(b, now)
+            continue
+        if b.close_at is not None and b.close_at < now_naive:
+            continue  # 이미 마감
+        cached = row is not None and row["regions"] is not None
+        if cached and not (recheck and row["reported_at"] is None):
+            b.regions = json.loads(row["regions"])
+        else:
+            try:
+                b.regions = client.regions(b.bid_no, b.bid_ord)
+            except Exception as exc:  # noqa: BLE001 - 지역을 못 읽어도 공고는 알린다
+                log.warning("참가가능지역 조회 실패 %s: %s", b.bid_no, exc)
+                out.region_errors += 1
+        b.tier = tier_of(b, cfg)
+        store.save(b, now)
+    out.calls = client.calls
+    diag["methods"] = out.methods
+    diag["region_samples"] = getattr(client, "region_samples", [])
 
 
 def run_camp(
@@ -453,72 +563,52 @@ def run_camp(
     client: G2BClient | None = None,
     lookback_days: int | None = None,
     recheck: bool = False,
+    s2b_client=None,
 ) -> CampOutcome:
-    """recheck: 아직 메일로 알리지 않은 공고의 참가가능지역을 저장된 값 대신 다시 조회한다."""
+    """recheck: 아직 메일로 알리지 않은 공고의 참가가능지역을 저장된 값 대신 다시 조회한다.
+
+    나라장터와 S2B 중 한 곳이 실패해도 다른 곳은 모아서 알린다 (둘 다 실패하면 G2BError)."""
     cfg = load_camp_config(config_dir)
     now = now or now_kst()
-    now_naive = now.replace(tzinfo=None)  # API 시각은 한국 시간(시간대 표기 없음)
+    now_naive = now.replace(tzinfo=None)
     store = CampStore(db_path)
     try:
-        days = lookback_days or (cfg.first_lookback_days if store.is_empty() else cfg.lookback_days)
-        begin = (now_naive - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
-        client = client or G2BClient(Http(min_interval=0.3, max_seconds=90), service_key())
-        raw = client.list_services(begin, now_naive)
-        raw_by_no = {str(i.get("bidNtceNo") or ""): i for i in raw}
-        bids = latest_per_notice([to_bid(i) for i in raw])
-        diag: dict = {"begin": begin.isoformat(), "list_region_fields": {}}
-        # 진단: 목록의 참가제한 여부(bidPrtcptLmtYn) 분포. 제한 공고는 참가가능지역 API 가 지역명을 돌려줌
-        # (9/29 확인: 서울 제한 공고 → ['서울특별시'], 제한 없는 공고 → 0건)
-        flags: dict[str, int] = {}
-        for i in raw:
-            flag = str(i.get("bidPrtcptLmtYn") or "-")
-            flags[flag] = flags.get(flag, 0) + 1
-        diag["bidPrtcptLmtYn"] = flags
-        out = CampOutcome(now=now, scanned=len(bids))
-
-        for b in bids:
-            if not matches(b.title, cfg):
-                continue
-            out.matched += 1
-            out.methods[b.method or "(없음)"] = out.methods.get(b.method or "(없음)", 0) + 1
-            if len(diag["list_region_fields"]) < 5:  # 목록 응답에 지역 제한 칸이 있는지 진단
-                fields = {k: v for k, v in raw_by_no.get(b.bid_no, {}).items()
-                          if re.search(r"rgn|Rgn|lmt|Lmt|Lcl|lcl", k) and v not in (None, "")}
-                diag["list_region_fields"][b.bid_no] = fields
-            row = store.known(b.bid_no)
-            if "취소" in b.notice_kind:
-                if row is not None:  # 이미 알린 공고가 취소되면 마감임박 목록에서 빠지게 표시만 바꾼다
-                    b.tier = TIER_CANCELED
-                    store.save(b, now)
-                continue
-            if b.close_at is not None and b.close_at < now_naive:
-                continue  # 이미 마감
-            cached = row is not None and row["regions"] is not None
-            if cached and not (recheck and row["reported_at"] is None):
-                b.regions = json.loads(row["regions"])
-            else:
-                try:
-                    b.regions = client.regions(b.bid_no, b.bid_ord)
-                except Exception as exc:  # noqa: BLE001 - 지역을 못 읽어도 공고는 알린다
-                    log.warning("참가가능지역 조회 실패 %s: %s", b.bid_no, exc)
-                    out.region_errors += 1
-            b.tier = tier_of(b, cfg)
-            store.save(b, now)
-        out.calls = client.calls
-        diag["methods"] = out.methods
-        diag["region_samples"] = getattr(client, "region_samples", [])
+        out = CampOutcome(now=now)
+        diag: dict = {}
+        tried = 1  # 나라장터
+        try:
+            _collect_g2b(store, cfg, now, client, lookback_days, recheck, out, diag)
+        except G2BError as exc:
+            log.error("나라장터 수집 실패: %s", exc)
+            out.errors.append(f"나라장터: {exc}")
         store.commit()
+        if cfg.s2b.get("enabled"):
+            from . import s2b
+
+            tried += 1
+            try:
+                s2b.collect_s2b(store, cfg, now, s2b_client, out, diag, lookback_days)
+            except Exception as exc:  # noqa: BLE001 - S2B 가 막혀도 나라장터 공고는 알린다
+                log.exception("S2B 수집 실패")
+                out.errors.append(f"S2B: {type(exc).__name__}: {exc}"[:300])
+            store.commit()
+        if len(out.errors) >= tried:
+            raise G2BError(" / ".join(out.errors))
 
         order = {t: i for i, t in enumerate(TIERS)}
+        topic_order = {t: i for i, t in enumerate(TOPICS)}
         # 키워드 설정을 바꾸면 아직 안 알린 공고에도 바로 적용되게 다시 거른다
         # 마감이 지난 공고, 마감일을 모르는데 오래된 공고(직찰 등)는 알리지 않는다
         stale = now_naive - timedelta(days=cfg.first_lookback_days + 4)
-        pending = [
-            b for b in store.unreported()
-            if b.tier in TIERS and matches(b.title, cfg)
-            and (b.close_at >= now_naive if b.close_at else (b.posted_at is None or b.posted_at >= stale))
-        ]
-        out.new = sorted(pending, key=lambda b: (order.get(b.tier, 9), b.close_at or datetime.max))
+        pending = []
+        for b in store.unreported():
+            b.topic = topic_of(b.title, cfg) or ""
+            if (b.tier in TIERS and b.topic
+                    and (b.close_at >= now_naive if b.close_at else (b.posted_at is None or b.posted_at >= stale))):
+                pending.append(b)
+        out.new = sorted(pending, key=lambda b: (order.get(b.tier, 9), topic_order.get(b.topic, 9),
+                                                 b.close_at or datetime.max))
+        diag["errors"] = out.errors
         store.log_run(out, diag)
         store.commit()
         soon_until = now_naive + timedelta(days=cfg.closing_soon_days + 1)
@@ -554,7 +644,7 @@ def camp_subject(out: CampOutcome) -> str:
     d = out.now.date()
     day = f"{d.month}/{d.day}({WEEKDAYS[d.weekday()]})"
     return (
-        f"[캠프 수주] {day} 바로지원 {_count(out.new, TIER_GO)}건 · 검토 {_count(out.new, TIER_REVIEW)}건"
+        f"[캠프·교육 수주] {day} 바로지원 {_count(out.new, TIER_GO)}건 · 검토 {_count(out.new, TIER_REVIEW)}건"
         f" · 참고 {_count(out.new, TIER_REF)}건"
     )
 
@@ -586,12 +676,15 @@ def _bid_table(title: str, note: str, bids: list[Bid], now: datetime) -> str:
         if b.org and b.demand_org and b.org != b.demand_org:
             org += f"<br><span style='color:#888;font-size:12px'>공고: {escape(b.org)}</span>"
         link = f"<a href='{escape(b.url, quote=True)}'>{escape(b.title)}</a>" if b.url else escape(b.title)
+        if b.topic == TOPIC_EDU:
+            link = "<span style='color:#1f4e78;font-size:12px;font-weight:bold'>[교육]</span> " + link
+        number = b.bid_no.removeprefix("S2B-")
         rows.append(
             "<tr>"
             f"<td {td} nowrap>{_close(b, now.replace(tzinfo=None))}</td>"
             f"<td {td}>{org}</td>"
-            f"<td {td}>{link}<br><span style='color:#888;font-size:12px'>{escape(b.method or '-')}"
-            f" · 공고번호 {escape(b.bid_no)}</span></td>"
+            f"<td {td}>{link}<br><span style='color:#888;font-size:12px'>{escape(b.source)} · {escape(b.method or '-')}"
+            f" · 공고번호 {escape(number)}</span></td>"
             f"<td {td} nowrap>{_money(b)}</td>"
             f"<td {td}>{escape(b.region_text)}</td>"
             "</tr>"
@@ -611,9 +704,11 @@ def camp_html(out: CampOutcome, cfg: CampConfig) -> str:
     small = f"{cfg.small_max // 10_000:,}만원"
     parts = [
         "<div style=\"font-family:'Malgun Gothic',sans-serif;font-size:14px;color:#222\">",
-        f"<h2 style='margin:0 0 8px'>나라장터 캠프 수주 공고 {out.now.date().isoformat()}</h2>",
+        f"<h2 style='margin:0 0 8px'>캠프·교육 수주 공고 (나라장터·S2B) {out.now.date().isoformat()}</h2>",
         f"<p>새 공고 <b>{len(out.new)}</b>건 (바로지원 {_count(out.new, TIER_GO)} · 검토 {_count(out.new, TIER_REVIEW)}"
         f" · 참고 {_count(out.new, TIER_REF)})</p>",
+        "<p style='margin:0 0 6px;color:#555;font-size:13px'>표마다 진로·취업·창업 공고가 먼저, "
+        "<b style='color:#1f4e78'>[교육]</b> 표시는 그 밖의 교육 운영 공고입니다.</p>",
     ]
     by_tier = {t: [b for b in out.new if b.tier == t] for t in TIERS}
     parts.append(_bid_table(
@@ -624,7 +719,8 @@ def camp_html(out: CampOutcome, cfg: CampConfig) -> str:
         out.now,
     ))
     parts.append(_bid_table(
-        "참고", "다른 지역 업체만 참가 가능. 과업 내용·금액을 견적 기준으로 참고", by_tier[TIER_REF], out.now
+        "참고", "다른 지역 업체나 학교가 미리 정한 업체('지정 업체')만 낼 수 있는 공고. 과업·금액은 견적 기준으로, "
+        "지정 업체 공고를 낸 학교는 다음 학기 영업 대상으로 참고", by_tier[TIER_REF], out.now
     ))
     if out.closing_soon:
         parts.append(_bid_table(
@@ -633,11 +729,17 @@ def camp_html(out: CampOutcome, cfg: CampConfig) -> str:
         ))
     if out.region_errors:
         parts.append(
-            f"<p style='color:#b45309'>참가가능지역을 읽지 못한 공고 {out.region_errors}건은 '검토'로 넣었습니다.</p>"
+            f"<p style='color:#b45309'>참가 가능 범위를 읽지 못한 공고 {out.region_errors}건은 '검토'로 넣었습니다.</p>"
+        )
+    if out.errors:
+        parts.append(
+            "<p style='color:#b45309'>⚠ 이번에 읽지 못한 곳: " + escape(" / ".join(out.errors))
+            + " — 다음 실행 때 다시 읽습니다.</p>"
         )
     parts.append(
         "<p style='color:#888;font-size:12px;margin-top:16px'>"
-        f"최근 용역 공고 {out.scanned:,}건 중 키워드에 맞는 {out.matched}건을 확인했습니다."
+        f"나라장터 용역 공고 {out.scanned:,}건 중 {out.matched}건, S2B 학교 용역 견적 {out.s2b_scanned:,}건 중"
+        f" {out.s2b_matched}건이 키워드에 맞았습니다."
         " 키워드는 config/camp.yaml 에서 바꿀 수 있습니다. 이 메일은 GitHub Actions 에서 자동 발송됩니다.</p></div>"
     )
     return "".join(parts)
@@ -648,5 +750,7 @@ def camp_text(out: CampOutcome) -> str:
     for b in out.new:
         close = f"{b.close_at:%m/%d %H:%M}" if b.close_at else "원문확인"
         price = f"{b.price:,}원" if b.price else "-"
-        lines.append(f"[{b.tier}] ~{close} | {b.demand_org or b.org} | {b.title} | {price} | {b.region_text}\n  {b.url}")
+        tag = "[교육] " if b.topic == TOPIC_EDU else ""
+        lines.append(f"[{b.tier}] ~{close} | {b.source} | {b.demand_org or b.org} | {tag}{b.title} | {price}"
+                     f" | {b.region_text}\n  {b.url}")
     return "\n".join(lines)
