@@ -279,11 +279,13 @@ def parse_report(label: str, url: str) -> None:
                 print(f"  link: {describe_anchor(a)}")
 
 
-def attach_report(url: str, template: str | None) -> None:
-    """상세 페이지의 첨부 공고문을 내려받아 꺼낸 글자 중 접수·기간 관련 줄과 찾은 마감일을 보여준다."""
+def attach_report(url: str, template: str | None, around: list[str] | None = None) -> None:
+    """상세 페이지의 첨부 공고문을 내려받아 꺼낸 글자 중 접수·기간 관련 줄과 찾은 마감일,
+    강사잇다 칸 정보(extract_info)를 보여준다. around 낱말이 있으면 그 줄 앞뒤를 그대로 보여준다."""
     from ulsan_jobs.attachments import extract_text, find_attachments
     from ulsan_jobs.dates import extract_deadline
     from ulsan_jobs.detail import page_soup
+    from ulsan_jobs.jobinfo import extract_info
 
     print("-" * 100)
     print(f"ATTACH {url}")
@@ -306,6 +308,14 @@ def attach_report(url: str, template: str | None) -> None:
         for line in (text or "").splitlines():
             if re.search(r"접\s*수|신\s*청|모\s*집|기\s*간|마\s*감|제\s*출|~", line) and line.strip():
                 print(f"    | {clip(line, 200)}")
+        print(f"  info={extract_info(text)}")
+        lines = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
+        for word in around or []:
+            for i, line in enumerate(lines):
+                if word in re.sub(r"\s+", "", line):
+                    print(f"  around '{word}' (줄 {i}):")
+                    for j in range(max(0, i - 5), min(len(lines), i + 20)):
+                        print(f"    {j:4d} | {clip(lines[j], 160)}")
 
 
 def main() -> int:
@@ -353,7 +363,7 @@ def main() -> int:
             HTTP.allow_legacy_tls(urlsplit(url).hostname or "")
     if args.attach:
         for url in args.url:
-            attach_report(url, args.attach_template)
+            attach_report(url, args.attach_template, args.around)
         return 0
     if args.parse:
         logging.basicConfig(level=logging.WARNING, format="  [%(levelname)s] %(message)s")
