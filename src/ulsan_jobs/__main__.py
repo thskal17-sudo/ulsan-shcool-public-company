@@ -178,9 +178,16 @@ def cmd_briefing(args) -> int:
         msg = f"{type(exc).__name__}: {exc}".replace("\n", " ")[:900]
         print(f"::error title=브리핑 실패::{msg}" if gha else f"브리핑 실패: {msg}")
         return 1
+    b = out.briefing
     if gha:
         print(f"::notice title=브리핑 결과::{out.reason} / {'발송함' if out.sent else '보내지 않음'}")
-    b = out.briefing
+        up = b.upload
+        if up is not None:
+            regions = ", ".join(f"{k} {v}" for k, v in up.by_region.items()) or "없음"
+            missing = f" · 빠진 곳: {', '.join(up.missing)}" if up.missing else ""
+            print(f"::notice title=강사잇다 합본 엑셀::{up.rows}줄 (보류 {up.held}) · {regions}{missing}")
+        if b.share_text:
+            print("::notice title=강사방 공유 글::" + b.share_text.replace("%", "%25").replace("\n", "%0A"))
     print(f"\n=== 오늘의 브리핑 {b.today} ===")
     for s in b.sections:
         state = "도착" if s.ready else "미도착"

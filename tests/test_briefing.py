@@ -147,3 +147,76 @@ def test_run_briefing_requires_recipients(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="BRIEFING_TO"):
         run_briefing(db_path=_db(tmp_path), state_path=tmp_path / "s.txt", send_mail=True,
                      config_dir=ROOT / "config", now=NOW, fetch=lambda url: REPORT.encode())
+
+
+# ---------------------------------------------------------------- 강사잇다 합본 엑셀 · 강사방 공유 글
+
+
+def _gyeongnam_upload(tmp_path) -> bytes:
+    """경남 저장소가 reports/gangsaitda/latest.xlsx 로 커밋하는 강사잇다 양식 (13칸)."""
+    from ulsan_jobs.gangsaitda import write_rows
+
+    rows = [
+        {"제목": "탁구 프로그램 도급강사 공개모집", "기관명": "창원시설공단", "지역": "경남 창원", "마감일": "2026-10-13",
+         "수업 일정": "원문 공고 참고", "상세 내용": "탁구", "원문 링크": "https://example.com/b"},
+        {"제목": "방과후 강사 모집", "기관명": "울산초", "지역": "울산", "마감일": "2026-10-02"},  # 울산과 겹침
+        {"제목": "지난 공고", "기관명": "옛학교", "지역": "경남", "마감일": "2026-09-01"},  # 캐시된 지난 파일 대비
+    ]
+    return write_rows(tmp_path / "gn.xlsx", rows, ROOT / "config" / "gangsaitda_template.xlsx").read_bytes()
+
+
+def test_briefing_attaches_merged_upload_and_share_text(tmp_path, monkeypatch):
+    from ulsan_jobs.gangsaitda import read_rows
+    from ulsan_jobs.mailer import MailConfig
+
+    upload = _gyeongnam_upload(tmp_path)
+
+    def fetch(url):
+        if "Gyeongnam" in url:
+            return upload if url.endswith(".xlsx") else REPORT.encode()
+        return None  # 평생교육원은 아직
+
+    sent = []
+    monkeypatch.setattr("ulsan_jobs.mailer.MailConfig.from_env",
+                        classmethod(lambda cls: MailConfig("me@x.com", "pw", ["me@x.com"])))
+    monkeypatch.setattr("ulsan_jobs.mailer.send", lambda cfg, msg: sent.append(msg))
+    monkeypatch.setenv("BRIEFING_TO", "a@x.com")
+    out = run_briefing(db_path=_db(tmp_path), state_path=tmp_path / "s.txt", send_mail=True, force=True,
+                       config_dir=ROOT / "config", now=NOW, fetch=fetch, out_html=tmp_path / "out" / "b.html")
+    up = out.briefing.upload
+    assert up.path.name == "강사잇다_부울경_2026-09-30.xlsx"
+    assert up.by_region == {"울산": 2, "경남": 2} and up.missing == ["대학평생교육원"]
+    rows = read_rows(up.path.read_bytes())
+    assert [r["제목"] for r in rows] == ["방과후 강사 모집", "탁구 프로그램 도급강사 공개모집", "어제 알린 공고"]
+    assert rows[1]["메모"] == "경남 수집" and up.rows == 3
+    msg = sent[0]
+    names = [part.get_filename() for part in msg.iter_attachments()]
+    assert names == ["강사잇다_부울경_2026-09-30.xlsx"]
+    html = msg.get_body(("html",)).get_content()
+    assert "강사방에 붙여 넣을 글" in html and "합본에 빠진 곳: 대학평생교육원" in html
+    assert out.briefing.share_text.splitlines()[0] == "[오늘의 부울경 강사 공고] 9/30(수) 새 공고 3건"
+
+
+def test_share_text_format():
+    from ulsan_jobs.briefing import Item, share_text
+
+    ulsan = Section("ulsan", "울산", ready=True,
+                    new=[Item("2026학년도 방과후 로봇 강사 모집", region="남구", deadline=date(2026, 10, 2))],
+                    closing=[Item("수영 강사 모집", deadline=TODAY)])
+    gn = Section("gyeongnam", "경남", ready=True, new=[Item("탁구 강사 모집", region="창원", deadline=date(2026, 10, 8))])
+    later = Section("lifelong", "대학평생교육원", ready=False, new=[Item("안 보여야 함")])
+    b = Briefing(TODAY, [ulsan, gn, later], CampSummary())
+    cfg = {"gangsaitda": {"site_url": "https://gangsaitda.kr", "share_max": 1}}
+    assert share_text(b, cfg) == (
+        "[오늘의 부울경 강사 공고] 9/30(수) 새 공고 2건 · 오늘 마감 1건\n"
+        "- 방과후 로봇 강사 모집 (울산 · D-2)\n"
+        "외 1건\n"
+        "전체 보기: https://gangsaitda.kr"
+    )
+    quiet = Briefing(TODAY, [Section("ulsan", "울산", ready=True, closing=[Item("수영 강사 모집", deadline=TODAY)])],
+                     CampSummary())
+    assert share_text(quiet, {}) == (
+        "[오늘의 부울경 강사 공고] 9/30(수) 새 공고는 없고 마감 임박 1건\n"
+        "- 수영 강사 모집 (울산 · D-day)\n"
+        "전체 보기: [사이트 주소]"
+    )

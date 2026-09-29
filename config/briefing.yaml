@@ -9,6 +9,11 @@ send_anyway_after: "09:00"
 closing_soon_days: 3
 # 섹션마다 최대 몇 건까지 보여줄지 (나머지는 '외 N건')
 max_items: 15
+# 강사잇다 운영: 세 지역 강사잇다 양식을 한 파일로 합쳐 첨부하고, 강사방 공유용 요약 글을 메일 맨 아래에 넣는다
+gangsaitda:
+  enabled: true
+  site_url: ""  # 강사잇다 주소가 정해지면 적는다 (비우면 공유 글에 '[사이트 주소]')
+  share_max: 10  # 공유 글에 넣을 공고 수 (나머지는 '외 N건')
 # 월요일 브리핑에 넣을 캠프 영업 현황 문서
 weekly_links:
   - label: 캠프 영업 현황 (이번 주 제안서 20곳은 월요일 아침 문서로 도착)
@@ -25,11 +30,15 @@ sources:
     type: md_report
     url: https://raw.githubusercontent.com/thskal17-sudo/Gyeongnam-Instructor-Announcement/main/reports/{date}.md
     link: https://github.com/thskal17-sudo/Gyeongnam-Instructor-Announcement/blob/main/reports/{date}.md
+    # 그 저장소 report 가 매일 같이 커밋하는 강사잇다 양식 (합본 엑셀에 넣는다)
+    upload_url: https://raw.githubusercontent.com/thskal17-sudo/Gyeongnam-Instructor-Announcement/main/reports/gangsaitda/latest.xlsx
   - id: lifelong
     name: 대학평생교육원
     type: md_report
     url: https://raw.githubusercontent.com/thskal17-sudo/Lifelong-Education-pyengsang-/main/reports/{date}.md
     link: https://github.com/thskal17-sudo/Lifelong-Education-pyengsang-/blob/main/reports/{date}.md
+    # 그 저장소 report 가 매일 같이 커밋하는 강사잇다 양식 (합본 엑셀에 넣는다)
+    upload_url: https://raw.githubusercontent.com/thskal17-sudo/Lifelong-Education-pyengsang-/main/reports/gangsaitda/latest.xlsx
   # 부산 강사 공고(busan-school-company)가 매일 돌기 시작하면 enabled: true 로 바꾼다.
   # 울산과 같은 구조라 그 저장소 state 브랜치의 DB 를 읽는다.
   - id: busan
