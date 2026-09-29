@@ -212,3 +212,15 @@ def test_recheck_looks_up_unreported_regions_again(tmp_path):
     out = run_camp(db_path=db, send_mail=False, config_dir=ROOT / "config", now=NOW, client=again, recheck=True)
     assert again.region_calls == ["R1"]
     assert [(b.bid_no, b.tier) for b in out.new] == [("R1", TIER_REF)]
+
+
+def test_keyword_change_applies_to_unreported(tmp_path):
+    db = tmp_path / "p.db"
+    run_camp(db_path=db, send_mail=False, config_dir=ROOT / "config", now=NOW,
+             client=FakeClient([item("R1", "진로캠프 운영")]))
+    cfg_dir = tmp_path / "cfg"
+    cfg_dir.mkdir()
+    text = (ROOT / "config" / "camp.yaml").read_text(encoding="utf-8")
+    (cfg_dir / "camp.yaml").write_text(text.replace("exclude:\n", "exclude:\n  - 진로캠프\n"), encoding="utf-8")
+    out = run_camp(db_path=db, send_mail=False, config_dir=cfg_dir, now=NOW, client=FakeClient([]))
+    assert out.new == []
