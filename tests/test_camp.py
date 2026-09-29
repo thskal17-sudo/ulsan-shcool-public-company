@@ -224,3 +224,16 @@ def test_keyword_change_applies_to_unreported(tmp_path):
     (cfg_dir / "camp.yaml").write_text(text.replace("exclude:\n", "exclude:\n  - 진로캠프\n"), encoding="utf-8")
     out = run_camp(db_path=db, send_mail=False, config_dir=cfg_dir, now=NOW, client=FakeClient([]))
     assert out.new == []
+
+
+def test_closed_notices_are_not_mailed_later(tmp_path):
+    db = tmp_path / "p.db"
+    run_camp(db_path=db, send_mail=False, config_dir=ROOT / "config", now=NOW,
+             client=FakeClient([item("R1", "진로캠프 운영", close="2026-09-30 16:00:00"),
+                                item("R2", "취업캠프 운영", close="")]))
+    out = run_camp(db_path=db, send_mail=False, config_dir=ROOT / "config",
+                   now=datetime(2026, 10, 1, 7, 30, tzinfo=KST), client=FakeClient([]))
+    assert [b.bid_no for b in out.new] == ["R2"]  # R1 은 마감, R2 는 마감일 모름(최근 게시)
+    out = run_camp(db_path=db, send_mail=False, config_dir=ROOT / "config",
+                   now=datetime(2026, 10, 20, 7, 30, tzinfo=KST), client=FakeClient([]))
+    assert out.new == []  # 마감일을 모르는 공고도 오래되면 뺀다
