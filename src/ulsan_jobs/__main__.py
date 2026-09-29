@@ -136,16 +136,29 @@ def cmd_camp(args) -> int:
 
 
 def cmd_briefing(args) -> int:
+    import os
+
     from .briefing import run_briefing
 
-    out = run_briefing(
-        db_path=Path(args.db),
-        state_path=Path(args.state),
-        send_mail=not args.no_mail,
-        force=args.force,
-        config_dir=Path(args.config),
-        out_html=Path(args.html) if args.html else None,
-    )
+    gha = os.environ.get("GITHUB_ACTIONS") == "true"  # 실행 기록 요약(annotation)에 보이게 남긴다
+    to_count = len([a for a in os.environ.get("BRIEFING_TO", "").split(",") if a.strip()])
+    if gha:
+        print(f"::notice title=브리핑 받는 사람::{to_count}명 (BRIEFING_TO)")
+    try:
+        out = run_briefing(
+            db_path=Path(args.db),
+            state_path=Path(args.state),
+            send_mail=not args.no_mail,
+            force=args.force,
+            config_dir=Path(args.config),
+            out_html=Path(args.html) if args.html else None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        msg = f"{type(exc).__name__}: {exc}".replace("\n", " ")[:900]
+        print(f"::error title=브리핑 실패::{msg}" if gha else f"브리핑 실패: {msg}")
+        return 1
+    if gha:
+        print(f"::notice title=브리핑 결과::{out.reason} / {'발송함' if out.sent else '보내지 않음'}")
     b = out.briefing
     print(f"\n=== 오늘의 브리핑 {b.today} ===")
     for s in b.sections:
