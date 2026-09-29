@@ -1,0 +1,39 @@
+# 오늘의 브리핑: 강사 공고(울산·경남·대학평생교육원)와 캠프 수주 공고를 메일 한 통으로 묶는다.
+#   python -m ulsan_jobs briefing [--no-mail] [--force]
+# 받는 사람은 GitHub Secret BRIEFING_TO (쉼표로 구분) — 저장소가 공개라 주소를 여기 적지 않는다.
+# 기존 지역별 메일은 그대로 나가고, 이 브리핑은 추가로 한 통 더 나간다.
+
+# 이 시각(KST)이 지나면 아직 도착하지 않은 곳이 있어도 도착한 것만으로 보낸다
+send_anyway_after: "09:00"
+# 마감임박으로 볼 남은 일수
+closing_soon_days: 3
+# 섹션마다 최대 몇 건까지 보여줄지 (나머지는 '외 N건')
+max_items: 15
+# 월요일 브리핑에 넣을 캠프 영업 현황 문서
+weekly_links:
+  - label: 캠프 영업 현황 (이번 주 제안서 20곳은 월요일 아침 문서로 도착)
+    url: https://claude.ai/code/artifact/5ec85342-efee-4c8c-be98-959392b2def6
+
+sources:
+  # 이 저장소(울산)의 수집 기록 DB (state 브랜치)
+  - id: ulsan
+    name: 울산
+    type: ulsan_db
+  # 경남·대학평생교육원 저장소가 매일 커밋하는 요약 보고서 reports/YYYY-MM-DD.md
+  - id: gyeongnam
+    name: 경남
+    type: md_report
+    url: https://raw.githubusercontent.com/thskal17-sudo/Gyeongnam-Instructor-Announcement/main/reports/{date}.md
+    link: https://github.com/thskal17-sudo/Gyeongnam-Instructor-Announcement/blob/main/reports/{date}.md
+  - id: lifelong
+    name: 대학평생교육원
+    type: md_report
+    url: https://raw.githubusercontent.com/thskal17-sudo/Lifelong-Education-pyengsang-/main/reports/{date}.md
+    link: https://github.com/thskal17-sudo/Lifelong-Education-pyengsang-/blob/main/reports/{date}.md
+  # 부산 강사 공고(busan-school-company)가 매일 돌기 시작하면 enabled: true 로 바꾼다.
+  # 울산과 같은 구조라 그 저장소 state 브랜치의 DB 를 읽는다.
+  - id: busan
+    name: 부산
+    type: ulsan_db
+    repo: https://github.com/thskal17-sudo/busan-school-company
+    enabled: false
