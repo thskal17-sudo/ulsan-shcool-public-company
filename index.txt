@@ -1,0 +1,12 @@
+r00.html	200	12499	https://www.s2b.kr/S2BNCustomer/tcmo001.do?forwardName=openViewTcmo11&estimateCode=202609221527568&tender_step_code=A&page_flag=2	상세 202609221527568 1
+r01.html	200	12279	https://www.s2b.kr/S2BNCustomer/tcmo001.do?forwardName=openViewTcmo11&estimateCode=202609211521619&tender_step_code=A&page_flag=2	상세 202609211521619 1
+r02.html	200	12586	https://www.s2b.kr/S2BNCustomer/tcmo001.do?forwardName=openViewTcmo11&estimateCode=202609161512700&tender_step_code=A&page_flag=2	상세 202609161512700 1
+r03.html	200	12425	https://www.s2b.kr/S2BNCustomer/tcmo001.do?forwardName=openViewTcmo11&estimateCode=202609111499653&tender_step_code=A&page_flag=2	상세 202609111499653 1
+r04.html	200	12268	https://www.s2b.kr/S2BNCustomer/tcmo001.do?forwardName=openViewTcmo11&estimateCode=202609291537165&tender_step_code=A&page_flag=2	상세 202609291537165 1
+r05.html	200	12271	https://www.s2b.kr/S2BNCustomer/tcmo001.do?forwardName=openViewTcmo11&estimateCode=202609281534744&tender_step_code=A&page_flag=2	상세 202609281534744 1
+r06.html	200	12258	https://www.s2b.kr/S2BNCustomer/tcmo001.do?forwardName=openViewTcmo11&estimateCode=202609291538483&tender_step_code=A&page_flag=2	상세 202609291538483 1
+r07.html	200	12432	https://www.s2b.kr/S2BNCustomer/tcmo001.do?forwardName=openViewTcmo11&estimateCode=202609281531656&tender_step_code=A&page_flag=2	상세 202609281531656 1
+r08.html	200	52541	https://www.s2b.kr/S2BNCustomer/tcmo001.do?forwardName=openViewTcmo12&estimateCode=202609281532446&tender_step_code=A&page_flag=2	상세 202609281532446 2
+r09.html	200	12384	https://www.s2b.kr/S2BNCustomer/tcmo001.do?forwardName=openViewTcmo11&estimateCode=202609181518613&tender_step_code=A&page_flag=2	상세 202609181518613 1
+r10.html	200	12467	https://www.s2b.kr/S2BNCustomer/tcmo001.do?forwardName=openViewTcmo11&estimateCode=202609291538960&tender_step_code=A&page_flag=2	상세 202609291538960 1
+r11.html	200	12644	https://www.s2b.kr/S2BNCustomer/tcmo001.do?forwardName=openViewTcmo11&estimateCode=202609281533398&tender_step_code=A&page_flag=2	상세 202609281533398 1

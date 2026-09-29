@@ -1,0 +1,3590 @@
+
+
+
+
+
+
+
+
+
+
+
+
+<meta charset="euc-kr">
+<link href="/S2BNCustomer/S2B/scrweb/css/s_style_v2.css" rel="stylesheet" type="text/css">
+<link href="/S2BNCustomer/S2B/scrweb/css/style.css" rel="stylesheet" type="text/css">
+<link href="/S2BNCustomer/S2B/scrweb/css/main_style.css" rel="stylesheet" type="text/css">
+<LINK href="/S2BNCustomer/S2B/scrweb/css/school_tender_style.css" type="text/css" rel="stylesheet">
+<script type="text/javascript" src="/S2BNCustomer/S2B/scrweb/js/common.js"></script>
+<script type="text/javascript" src="/S2BNCustomer/S2B/scrweb/js/jscommon.js"></script>
+<script type="text/javascript" src="/S2BNCustomer/S2B/scrweb/js/my_scr.js"></script>
+<script type="text/javascript" src="/S2BNCustomer/S2B/scrweb/js/calendar.js"></script>
+<script type="text/javascript" src="/S2BNCustomer/S2B/scrweb/js/jindo.all.ns.js" charset="utf-8"></script>
+
+
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=euc-kr" />
+<LINK href="/S2BNCustomer/S2B/scrweb/css/school_tender_style.css" type=text/css rel=stylesheet>
+<title>S2B</title>
+<SCRIPT type="text/javascript">
+var limitRegionL1 ="";
+var limitRegionL2 ="";
+var limitRegionL3 ="";
+var limitRegionL4 ="";
+var limitRegionL5 ="";
+
+function fileDownload(fileName, uniqueFileName){
+
+	if(uniqueFileName==""){
+
+		uniqueFileName = fileName;
+
+	}
+
+	var url="http://www.s2b.kr/S2BNCustomer/S2B/FileDownload.jsp?FILENAME="+fileName+"&UNIQUEFILENAME="+uniqueFileName+"&gubun=estimation";
+/*
+	document.location.href = url;
+	document.getElementById("fileDown").src = url;
+	document.getElementById("fileDown").location.reload();
+*/
+	fileDown.location = url;
+}
+// 공고문 출력
+function ozPrint(){
+	var form = document.tcmu100Form;
+	
+	var gbn = "";//1,2,3,0
+    var gbn_str = "";
+    var chkFlag1 = false; 
+    var chkFlag2 = false;
+
+	var pd_competition_yn ='N'; 
+	var productionCheck ='N'; 
+	
+	//1.중기간 경쟁제품&직접생산확인서
+	if(pd_competition_yn == "Y" && productionCheck == "Y"){
+		
+	}
+	
+	//2.추정가격 2천만원 초과 5천만원 이하 체크
+    var estimateCost = '2878182';
+    if(estimateCost > 20000000 && estimateCost <= 50000000){
+    	chkFlag2 = true;
+    }
+	
+    if(chkFlag1 & chkFlag2){//두개다 조건이 맞으면
+    	gbn = 3;
+    }else if(chkFlag1 & !chkFlag2){//1번만 체크되면
+    	gbn = 1;
+    }else if(!chkFlag1 & chkFlag2){//2번만 체크되면
+    	gbn = 2;
+    }else{
+    	gbn = 0;
+    }
+
+	var estimateName ='[재]2026학년도 2학기 하단초등학교 진로체험학습 차량 임차 안내 공고';
+	var basic_cost ='3166000.00';
+	var acceptStartDate ='202609290900';
+	var acceptEndDate ='202610020900';
+	var payableComment ='202609281100';
+	
+    var stDay  = acceptStartDate.substring(0, 4) +'.'+acceptStartDate.substring(4, 6)+'.'+acceptStartDate.substring(6, 8)+' '+
+		          +acceptStartDate.substring(8, 10)+':'+acceptStartDate.substring(10, 12);
+	var endDay = acceptEndDate.substring(0, 4) +'.'+acceptEndDate.substring(4, 6)+'.'+acceptEndDate.substring(6, 8)+' '+
+				  +acceptEndDate.substring(8, 10)+':'+acceptEndDate.substring(10, 12);
+    var conStDay ="";
+	var conEndDay ="";
+	var location = "";
+	var ozName="";					  
+	
+	var companyName ='하단초등학교';
+	var openDay = payableComment.substring(0, 4) +'.'+payableComment.substring(4, 6)+'.'+payableComment.substring(6, 8);
+
+	
+	deliveryTerm = '20261106~20261130';
+	conStDay = '20261106~20261130';
+	
+	var edufineCode2 = deliveryTerm.split("~");
+	if(edufineCode2.length>1)
+	{
+		conStDay =  edufineCode2[0].substring(0, 4) +'.'+edufineCode2[0].substring(4, 6)+'.'+edufineCode2[0].substring(6, 8);
+		conEndDay = edufineCode2[1].substring(0, 4) +'.'+edufineCode2[1].substring(4, 6)+'.'+edufineCode2[1].substring(6, 8);
+	}else if(edufineCode2.length>0)
+	{
+		conStDay =  edufineCode2[0].substring(0, 4) +'.'+edufineCode2[0].substring(4, 6)+'.'+edufineCode2[0].substring(6, 8);
+	}
+	
+	var estimateSection = '3';
+	var deliveryCode = 'ZD000451' ;
+	if(estimateSection == "1"){
+		if(deliveryCode == "ZD000415"){
+			location="행정실";
+		}else if(deliveryCode == "ZD000416"){
+			location="교무실";
+		}else if(deliveryCode == "ZD000417"){
+			location="보건실";
+		}else{
+			location='키자니아, 알로이시오기지 등';
+		}						
+		if('ZD000010'=='ZD000008')
+		{
+			ozName="tcmu203";	
+		}else
+		{
+			ozName="tcmu200";	
+		}		
+	}else if(estimateSection== "2"){
+		location = '키자니아, 알로이시오기지 등';
+		ozName="tcmu201";
+	}else{
+		location = '키자니아, 알로이시오기지 등';
+		ozName="tcmu202";
+	}	
+	
+	var area="";
+	var telNum ='051-945-8071';	
+		
+		area=limitRegionL1 
+			+limitRegionL2 
+			+limitRegionL3 
+			+limitRegionL4
+			+limitRegionL5;
+	 
+	
+	var loc1 =    screen.availWidth;
+    var loc2 =    screen.availHeight;
+    var url = "";
+    var bidRateObj = '90';
+    
+    url = "/S2BNCustomer/S2B/scrweb/ssmu/tcmu/tcmu160oz.jsp?bidRate="+ bidRateObj + "&estimateName="+estimateName +"&basic_cost="+basic_cost+"&stDay="+stDay+"&endDay="+endDay+"&conStDay="+conStDay+"&conEndDay="+conEndDay+"&location="+location+"&companyName="+companyName+"&openDay="+openDay+"&ozName="+ozName+"&telNum="+telNum+"&area="+area+"&gbn="+gbn+"&gbn_str="+gbn_str;
+    window.open(url, "fnPrint", "width=840,height=700,scrollbars=no,align=left,left="+(loc1)/10+",top="+(loc2)/10);
+}
+
+</SCRIPT>
+
+</head>
+
+<body oncontextmenu="return false">
+<form name="tcmo001Form" method="post" action="/S2BNCustomer/tcmo001.do" enctype="multipart/form-data">
+  <input type="hidden" name="pageNo" value="1">
+  <input type="hidden" name="forwardName" value="openViewTcmo12">
+
+	<!-- 파일다운로드시 새창 안띄우기 -->
+	<iframe id="fileDown" name="fileDown" style='visibility:hidden' src="" width="1" height="1"></iframe>
+	<!-- 파일다운로드시 새창 안띄우기 -->
+
+	<table width="100%" border="0" cellspacing="0" cellpadding="0">
+	<tr>
+	<td background="/S2BNCustomer/S2B/scrweb/images/tender/title_back_img.gif">
+	<table width="100%" border="0" cellspacing="0" cellpadding="0">
+	<tr>
+	<td width="210"><img src="/S2BNCustomer/S2B/scrweb/images/condition/cont_title_03_2.gif" width="220" height="37" border="0" /></td>
+	<td class="table_navi"><img src="/S2BNCustomer/S2B/scrweb/images/tender/dot_navi.gif" width="10" height="10" border="0 style="vertical-align:middle"/>HOME&gt;계약현황&gt;안내공고</td>
+	</tr>
+	</table>
+	</td>
+	</tr>
+	<tr>
+	<td class="td_pd"></td>
+	</tr>
+	<tr>
+	<td>
+	
+	<!--content start-->
+	<table width="100%" border="0" cellspacing="0" cellpadding="0">
+	<tr>
+	<td>
+	<table width="100%" border="0" cellspacing="0" cellpadding="0" style="table-layout:fixed" class="table_line">
+	<colgroup>
+		<col width="17%" />
+		<col width="33%" />
+		<col width="17%" />
+		<col width="33%" />
+	</colgroup>
+	<tr>
+	<td width="130" class="td_dark_blue">수요기관명</td>
+	<td width="260" class="td_dark_gray">하단초등학교</td>
+	<td width="130" class="td_dark_blue">공고자명</td>
+	<td width="260" class="td_dark_gray">김서현</td>
+	</tr>
+	<tr>
+	<td rowspan="2" class="td_dark_blue">거래구분</td>
+	<td colspan="3" class="td_dark_gray">
+	<input type="radio" name="tcmu100VO.businessType" value="1" checked="checked"  style="vertical-align:middle;" disabled>총액계약	
+	</td>
+	</tr>
+	<tr>
+	<td class="td_dark_gray">
+	<input name="tcmu100VO.estimateSection" type="radio" class="button" value="1"  style="vertical-align:middle;" disabled>물품
+	<input name="tcmu100VO.estimateSection" type="radio" class="button" value="2"  style="vertical-align:middle;" disabled>공사
+	<input name="tcmu100VO.estimateSection" type="radio" class="button" value="3" checked style="vertical-align:middle;" disabled>용역
+	
+	</td>
+	<td width="130" class="td_dark_blue">분류</td>
+	<td width="260" class="td_dark_gray">
+	
+	<select name="estimateCategory" style="width:150px; height:auto;" class="select_input" disabled>
+	
+	
+	
+	
+	
+	
+	
+	
+	<option value="ZD000001" >건강검진</option>
+	
+	
+	
+	<option value="ZD000002" >서비스용역</option>
+	
+	
+	
+	<option value="ZD000003" >설계/감리</option>
+	
+	
+	
+	<option value="ZD000004" >숙박</option>
+	
+	
+	
+	<option value="ZD000005" >안전관리</option>
+	
+	
+	
+	<option value="ZD000006" >안전진단</option>
+	
+	
+	
+	<option value="ZD000007" >여행사</option>
+	
+	
+	
+	<option value="ZD000010" selected>전세버스</option>
+	
+	
+	
+	<option value="ZD000011" >청소/위생/경비용역</option>
+	
+	
+	
+	<option value="ZD000012" >폐기물처리</option>
+	
+	
+	
+	<option value="ZD000013" >행사</option>
+	
+	
+	
+	<option value="ZD000017" >기타 일반용역</option>
+	
+	
+	
+	<option value="ZD000018" >기타 기술용역</option>
+	
+	
+	
+	
+	
+	</select>
+	
+	</td>
+	</tr>
+	
+	<tr>
+	<td class="td_dark_blue">안내공고명</td>
+	<td colspan="3" class="td_dark_gray">
+	[재]2026학년도 2학기 하단초등학교 진로체험학습 차량 임차 안내 공고
+	</td>
+	</tr>
+	<tr>
+	<td width="130" class="td_dark_blue" style="height:auto">계약상대자결정</td>
+	<td width="260" class="td_dark_gray" style="height:auto"> <b>예정가격 대비 최저가</b><br><font class="f11_5sr">※예정가격 대비 최저가란? 예정가격 대비 제출된 견적가격이 공사 89.745%, 물품/용역 88%(추정가격 2천만원 이하인 물품·용역은 90%) 이상으로 견적서를 제출한 자 중 최저가격으로 제출한 자를 의미함.</font></td>
+	<td width="130" class="td_dark_blue" style="height:auto">예가방법</td>
+	<td width="260" class="td_dark_gray" style="height:auto">
+	
+	   
+	   복수예가
+	   
+	
+	</td>
+	</tr>
+	<tr>
+	<td class="td_dark_blue" style="letter-spacing:-1px;">기초금액(VAT포함,원)</td>
+	<td width="260" class="td_dark_gray">
+	<input name="basic_cost" type="text" class="blue_input" maxlength="10" size="10"  style="width: 100px; height:auto;text-align: right; ime-mode: disabled;" value="3,166,000" disabled> 
+	
+	</td>
+	<td class="td_dark_blue">견적율(%)</td>
+	<td width="260" class="td_dark_gray">
+	   90 %
+	</td>
+	</tr>
+	
+	<tr>
+	<td class="td_dark_blue">추정가격(원)</td>
+	<td class="td_dark_gray" style="vertical-align:middle;"><!-- style="height:50px;"-->
+	<!--2단rows시작-->  
+	<table width="100%"  border="0" cellpadding="0" cellspacing="0">
+	<tr>
+	<td height="30">
+	<input name="estimateCost" type="text" class="blue_input" size="10"  style="width: 100px; height:auto;text-align: right; ime-mode: disabled;" maxlength="10" value="2,878,182" disabled/> 
+	</td>
+	</tr>
+	
+	</table>
+	<!--2단rows끝-->
+	</td>
+	<td class="td_dark_blue">예가범위</td>
+	<td class="td_dark_gray" style="vertical-align:middle;">-3% ~ +3%
+	</td>
+	</tr>
+	<tr>
+	<td class="td_dark_blue" style="height:auto">참가자격제한</td>
+	<td colspan="3" class="td_dark_gray" style="padding-top:5px; padding-bottom:5px; height:auto">
+	<table width="98%" border="0" cellspacing="0" cellpadding="0">
+	<tr>
+	<td>
+	<input id="oestimateCompany1" type="radio"  name="tcmu100VO.estimateCompany" value="1"  style="vertical-align:middle;" disabled/>전체공개
+	<input id="oestimateCompany3" type="radio"  name="tcmu100VO.estimateCompany" value="3" checked style="vertical-align:middle;" disabled/>참가가능지역 선택
+	<input id="oestimateCompany2" type="radio"  name="tcmu100VO.estimateCompany" value="2"  style="vertical-align:middle;display:none;" disabled/>
+	</td>
+	</tr>
+	<!--지역제한선택시작-->
+	<tr>
+	<td height="5" bgcolor="#FFFFFF"></td>
+	</tr>
+	<tr>
+	<td>
+	
+	
+	<table width="100%" border="0" cellpadding="0" cellspacing="0"  align="center" class="view_box2"  id="areaLimit">
+	
+	<tr id="region1_tr">
+	<td width="210" class="td_dark_gray">시도 : <select name="limit_region_l1" class="select_input" style="width: 150px;" disabled>
+	
+	
+	<option value="">선택</option>
+	
+	<option value="10" >서울
+	</option>
+														                                      
+	
+	<option value="20" >강원
+	</option>
+														                                      
+	
+	<option value="30" >대전
+	</option>
+														                                      
+	
+	<option value="35" >충남
+	</option>
+														                                      
+	
+	<option value="38" >충북
+	</option>
+														                                      
+	
+	<option value="40" >인천
+	</option>
+														                                      
+	
+	<option value="45" >경기
+	</option>
+														                                      
+	
+	<option value="50" >광주
+	</option>
+														                                      
+	
+	<option value="55" >전남
+	</option>
+														                                      
+	
+	<option value="58" >전북
+	</option>
+														                                      
+	
+	<option value="60" selected>부산
+	</option>
+	
+	<script type="text/javascript">
+	limitRegionL1='부산'+" "; 
+	</script>
+														                                      
+	
+	<option value="65" >경남
+	</option>
+														                                      
+	
+	<option value="68" >울산
+	</option>
+														                                      
+	
+	<option value="69" >제주
+	</option>
+														                                      
+	
+	<option value="70" >대구
+	</option>
+														                                      
+	
+	<option value="75" >경북
+	</option>
+														                                      
+	
+	<option value="80" >세종
+	</option>
+														                                      
+	
+	
+	</select></td>
+	<td class="td_dark_gray">시군 : <select name="limit_region_s1" class="select_input" style="width: 100px;" disabled>
+	
+	
+	<option value="">전체</option>
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	<option value="6001" >강서구</option>
+	
+	
+	
+	
+	<option value="6002" >금정구</option>
+	
+	
+	
+	
+	<option value="6003" >남구</option>
+	
+	
+	
+	
+	<option value="6004" >동구</option>
+	
+	
+	
+	
+	<option value="6005" >동래구</option>
+	
+	
+	
+	
+	<option value="6006" >부산진구</option>
+	
+	
+	
+	
+	<option value="6007" >북구</option>
+	
+	
+	
+	
+	<option value="6008" >사상구</option>
+	
+	
+	
+	
+	<option value="6009" >사하구</option>
+	
+	
+	
+	
+	<option value="6010" >서구</option>
+	
+	
+	
+	
+	<option value="6011" >수영구</option>
+	
+	
+	
+	
+	<option value="6012" >연제구</option>
+	
+	
+	
+	
+	<option value="6013" >영도구</option>
+	
+	
+	
+	
+	<option value="6014" >중구</option>
+	
+	
+	
+	
+	<option value="6015" >해운대구</option>
+	
+	
+	
+	
+	<option value="6016" >기장군</option>
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	</select></td>
+	</tr>
+	<tr id="region2_tr">
+	<td class="td_dark_gray">시도 : <select name="limit_region_l2" class="select_input" style="width: 150px;" disabled>
+	
+	
+	<option value="">선택</option>
+	
+	<option value="10" >서울</option>
+															                                      
+	
+	<option value="20" >강원</option>
+															                                      
+	
+	<option value="30" >대전</option>
+															                                      
+	
+	<option value="35" >충남</option>
+															                                      
+	
+	<option value="38" >충북</option>
+															                                      
+	
+	<option value="40" >인천</option>
+															                                      
+	
+	<option value="45" >경기</option>
+															                                      
+	
+	<option value="50" >광주</option>
+															                                      
+	
+	<option value="55" >전남</option>
+															                                      
+	
+	<option value="58" >전북</option>
+															                                      
+	
+	<option value="60" selected>부산</option>
+	
+	<script type="text/javascript">
+	limitRegionL2='부산'+" "; 
+	</script>
+															                                      
+	
+	<option value="65" >경남</option>
+															                                      
+	
+	<option value="68" >울산</option>
+															                                      
+	
+	<option value="69" >제주</option>
+															                                      
+	
+	<option value="70" >대구</option>
+															                                      
+	
+	<option value="75" >경북</option>
+															                                      
+	
+	<option value="80" >세종</option>
+															                                      
+	
+	
+	</select></td>
+	<td class="td_dark_gray">시군 : <select name="limit_region_s2" class="select_input" style="width: 100px;" disabled>
+	
+	
+	<option value="">전체</option>
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	<option value="6001" >강서구</option>
+														                                        
+	
+	
+	
+	<option value="6002" >금정구</option>
+														                                        
+	
+	
+	
+	<option value="6003" >남구</option>
+														                                        
+	
+	
+	
+	<option value="6004" >동구</option>
+														                                        
+	
+	
+	
+	<option value="6005" >동래구</option>
+														                                        
+	
+	
+	
+	<option value="6006" >부산진구</option>
+														                                        
+	
+	
+	
+	<option value="6007" >북구</option>
+														                                        
+	
+	
+	
+	<option value="6008" >사상구</option>
+														                                        
+	
+	
+	
+	<option value="6009" >사하구</option>
+														                                        
+	
+	
+	
+	<option value="6010" >서구</option>
+														                                        
+	
+	
+	
+	<option value="6011" >수영구</option>
+														                                        
+	
+	
+	
+	<option value="6012" >연제구</option>
+														                                        
+	
+	
+	
+	<option value="6013" >영도구</option>
+														                                        
+	
+	
+	
+	<option value="6014" >중구</option>
+														                                        
+	
+	
+	
+	<option value="6015" >해운대구</option>
+														                                        
+	
+	
+	
+	<option value="6016" >기장군</option>
+														                                        
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	</select></td>
+	</tr>
+	<tr id="region3_tr">
+	<td class="td_dark_gray">시도 : <select name="limit_region_l3" class="select_input" style="width: 150px;" disabled>
+	
+	
+	<option value="">선택</option>
+	
+	<option value="10" >서울</option>
+															                                      
+	
+	<option value="20" >강원</option>
+															                                      
+	
+	<option value="30" >대전</option>
+															                                      
+	
+	<option value="35" >충남</option>
+															                                      
+	
+	<option value="38" >충북</option>
+															                                      
+	
+	<option value="40" >인천</option>
+															                                      
+	
+	<option value="45" >경기</option>
+															                                      
+	
+	<option value="50" >광주</option>
+															                                      
+	
+	<option value="55" >전남</option>
+															                                      
+	
+	<option value="58" >전북</option>
+															                                      
+	
+	<option value="60" selected>부산</option>
+	
+	<script type="text/javascript">
+	limitRegionL3='부산'+" "; 
+	</script>
+															                                      
+	
+	<option value="65" >경남</option>
+															                                      
+	
+	<option value="68" >울산</option>
+															                                      
+	
+	<option value="69" >제주</option>
+															                                      
+	
+	<option value="70" >대구</option>
+															                                      
+	
+	<option value="75" >경북</option>
+															                                      
+	
+	<option value="80" >세종</option>
+															                                      
+	
+	
+	</select></td>
+	<td class="td_dark_gray">시군 : <select name="limit_region_s3" class="select_input" style="width: 100px;" disabled>
+	
+	
+	<option value="">전체</option>
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	<option value="6001" >강서구</option>
+															                                        
+	
+	
+	
+	<option value="6002" >금정구</option>
+															                                        
+	
+	
+	
+	<option value="6003" >남구</option>
+															                                        
+	
+	
+	
+	<option value="6004" >동구</option>
+															                                        
+	
+	
+	
+	<option value="6005" >동래구</option>
+															                                        
+	
+	
+	
+	<option value="6006" >부산진구</option>
+															                                        
+	
+	
+	
+	<option value="6007" >북구</option>
+															                                        
+	
+	
+	
+	<option value="6008" >사상구</option>
+															                                        
+	
+	
+	
+	<option value="6009" >사하구</option>
+															                                        
+	
+	
+	
+	<option value="6010" >서구</option>
+															                                        
+	
+	
+	
+	<option value="6011" >수영구</option>
+															                                        
+	
+	
+	
+	<option value="6012" >연제구</option>
+															                                        
+	
+	
+	
+	<option value="6013" >영도구</option>
+															                                        
+	
+	
+	
+	<option value="6014" >중구</option>
+															                                        
+	
+	
+	
+	<option value="6015" >해운대구</option>
+															                                        
+	
+	
+	
+	<option value="6016" >기장군</option>
+															                                        
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	</select></td>
+	</tr>
+	<tr id="region4_tr">
+	    <td class="td_dark_gray">시도 : <select name="limit_region_l4" class="select_input" style="width: 150px;" disabled>
+	      
+	      
+	        <option value="">선택</option>
+	        
+	          <option value="10" >서울</option>
+	                                                                                                       
+	        
+	          <option value="20" >강원</option>
+	                                                                                                       
+	        
+	          <option value="30" >대전</option>
+	                                                                                                       
+	        
+	          <option value="35" >충남</option>
+	                                                                                                       
+	        
+	          <option value="38" >충북</option>
+	                                                                                                       
+	        
+	          <option value="40" >인천</option>
+	                                                                                                       
+	        
+	          <option value="45" >경기</option>
+	                                                                                                       
+	        
+	          <option value="50" >광주</option>
+	                                                                                                       
+	        
+	          <option value="55" >전남</option>
+	                                                                                                       
+	        
+	          <option value="58" >전북</option>
+	                                                                                                       
+	        
+	          <option value="60" selected>부산</option>
+	            
+	                <script type="text/javascript">
+	                limitRegionL4='부산'+" "; 
+	                </script>
+	                                                                                                       
+	        
+	          <option value="65" >경남</option>
+	                                                                                                       
+	        
+	          <option value="68" >울산</option>
+	                                                                                                       
+	        
+	          <option value="69" >제주</option>
+	                                                                                                       
+	        
+	          <option value="70" >대구</option>
+	                                                                                                       
+	        
+	          <option value="75" >경북</option>
+	                                                                                                       
+	        
+	          <option value="80" >세종</option>
+	                                                                                                       
+	        
+	      
+	    </select></td>
+	    <td class="td_dark_gray">시군 : <select name="limit_region_s4" class="select_input" style="width: 100px;" disabled>
+	      
+	      
+	        <option value="">전체</option>
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	            <option value="6001" >강서구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6002" >금정구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6003" >남구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6004" >동구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6005" >동래구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6006" >부산진구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6007" >북구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6008" >사상구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6009" >사하구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6010" >서구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6011" >수영구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6012" >연제구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6013" >영도구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6014" >중구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6015" >해운대구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6016" >기장군</option>
+	                                                                                                         
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	      
+	    </select></td>
+	  </tr>
+	  <tr id="region5_tr">
+	    <td class="td_dark_gray">시도 : <select name="limit_region_l5" class="select_input" style="width: 150px;" disabled>
+	      
+	      
+	        <option value="">선택</option>
+	        
+	          <option value="10" >서울</option>
+	                                                                                                       
+	        
+	          <option value="20" >강원</option>
+	                                                                                                       
+	        
+	          <option value="30" >대전</option>
+	                                                                                                       
+	        
+	          <option value="35" >충남</option>
+	                                                                                                       
+	        
+	          <option value="38" >충북</option>
+	                                                                                                       
+	        
+	          <option value="40" >인천</option>
+	                                                                                                       
+	        
+	          <option value="45" >경기</option>
+	                                                                                                       
+	        
+	          <option value="50" >광주</option>
+	                                                                                                       
+	        
+	          <option value="55" >전남</option>
+	                                                                                                       
+	        
+	          <option value="58" >전북</option>
+	                                                                                                       
+	        
+	          <option value="60" selected>부산</option>
+	            
+	                <script type="text/javascript">
+	                limitRegionL5='부산'+" "; 
+	                </script>
+	                                                                                                       
+	        
+	          <option value="65" >경남</option>
+	                                                                                                       
+	        
+	          <option value="68" >울산</option>
+	                                                                                                       
+	        
+	          <option value="69" >제주</option>
+	                                                                                                       
+	        
+	          <option value="70" >대구</option>
+	                                                                                                       
+	        
+	          <option value="75" >경북</option>
+	                                                                                                       
+	        
+	          <option value="80" >세종</option>
+	                                                                                                       
+	        
+	      
+	    </select></td>
+	    <td class="td_dark_gray">시군 : <select name="limit_region_s5" class="select_input" style="width: 100px;" disabled>
+	      
+	      
+	        <option value="">전체</option>
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	            <option value="6001" >강서구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6002" >금정구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6003" >남구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6004" >동구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6005" >동래구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6006" >부산진구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6007" >북구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6008" >사상구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6009" >사하구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6010" >서구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6011" >수영구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6012" >연제구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6013" >영도구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6014" >중구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6015" >해운대구</option>
+	                                                                                                         
+	          
+	        
+	          
+	            <option value="6016" >기장군</option>
+	                                                                                                         
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	          
+	        
+	      
+	    </select></td>
+	  </tr>
+	
+	
+	</table>
+	
+	
+	</td>
+	</tr>
+	<!--지역제한선택끝--> 
+	<!--공급업체선택시작-->
+	<tr>
+	<td height="5" bgcolor="#FFFFFF"></td>
+	</tr>
+	<tr>
+	<td>
+	
+	
+	
+	</td>
+	</tr>
+	<!--공급업체선택끝---->
+	</table>
+	</td>
+	</tr>
+	
+	<tr>
+	<td class="td_dark_blue">견적공고일</td>
+	<td colspan="3" class="td_dark_gray" style="vertical-align:middle;"><!-- style="height:50px;"-->
+	   2026-09-28 11:00
+	</td>
+	</tr>
+	
+	<tr>
+	<td class="td_dark_blue">접수기간</td>
+	<td colspan="3" class="td_dark_gray" style="padding-top:5px; padding-bottom:5px; height:auto"><!-- style="height:50px;"-->
+	   시작일 : 2026-09-29 09:00 ~ 마감일 : 2026-10-02 09:00                   				
+	</td>
+	</tr>
+	
+	<tr>
+	<td width="130" class="td_dark_blue">결제방법</td>
+	<td width="260" class="td_dark_gray">
+	
+	<select id="tcmu100VO.payableType" name="tcmu100VO.payableType" class="select_input" style="width: 100px; " disabled>
+	<option value="1" selected>계좌입금</option>
+	<option value="2" >구매카드</option>
+	</select>
+	
+	</td>
+	<td width="130" class="td_dark_blue">결제조건</td>
+	<td width="260" class="td_dark_gray">
+	
+	<select id="tcmu100VO.termsCode" name="tcmu100VO.termsCode"  class="select_input" style="width:150px; " disabled>
+	<option value="" >- 선택하세요 -</option>
+	<option value="ZD000411" >검수 후 즉시 결제</option>
+	<option value="ZD000412" >검수 후 7일 이내 결제</option>
+	<option value="ZD000413" >검수 후 15일 이내 결제</option>
+	<option value="ZD000452" selected>대금청구 후 5일 이내(공휴일 및 토요일 제외)</option>
+	<option value="ZD000453" >대금청구 후 10일 이내(공휴일 및 토요일 제외)</option>
+	<option value="ZD000450" >직접입력</option>
+	</select>
+	
+	
+	
+	</td>
+	</tr>
+	<tr>
+	<td width="130" class="td_dark_blue">요청배송방법</td>
+	<td width="260" class="td_dark_gray">
+	
+	<select id="tcmu100VO.deliveryConditionCode" name="tcmu100VO.deliveryConditionCode" class="select_input" style="width: 100px; " disabled>
+	<option value="" >-선택하세요-</option>
+	<option value="ZD000053" selected>상관없음</option>
+	<option value="ZD000051" >직배송</option>
+	<option value="ZD000052" >택배</option>
+	<option value="ZD000054" >소포</option>
+	<option value="ZD000055" >설치</option>
+	</select>
+	
+	<input type="checkbox" name="tcmu100VO.deliveryOption" style="vertical-align:middle;"  disabled />도서/산간지역배송
+	
+	</td>
+	<td width="130" class="td_dark_blue">계약기간</td>
+	<td width="260" class="td_dark_gray">
+	   20261106~20261130
+	</td>
+	</tr>
+	
+	<tr>
+	<td class="td_dark_blue">납품장소</td>
+	<td colspan="3" class="td_dark_gray">
+	
+	<select id="tcmu100VO.deliveryCode" name="tcmu100VO.deliveryCode" class="select_input" style="width: 100px; " disabled>
+	<option value="" >-선택하세요-</option>
+	<option value="ZD000415" >행정실</option>
+	<option value="ZD000416" >교무실</option>
+	<option value="ZD000417" >보건실</option>
+	<option value="ZD000451" selected>직접입력</option>
+	</select>
+	
+	
+	<input type="text" name="tcmu100VO.deliveryLocation" id="deliveryLocation" class="blue_input" size="50" style="height:20px" maxlength="100" value="키자니아, 알로이시오기지 등" disabled>
+		
+	</td>
+	</tr>
+	<tr>
+	<td class="td_dark_blue">주요 요청사항</td>
+	<td colspan="3" class="td_dark_gray" style="padding-top:5px; padding-bottom:5px; height:auto">
+	<table width="99%"  border="0" cellpadding="0" cellspacing="0">
+	<tr>
+	<td class="view_box" height="30">						  
+	<textarea name="tcmu100VO.quality" style="width:100%;" rows="5" class="view_text" disabled>1. 임차기간: 2026. 11. 6.(금), 11. 18.(수)
+2. 차량대수: 45인승 5대
+3. 운행일정: 붙임 공고문 및 특수조건을 참조
+4. 문의사항: 행정실 051-202-4417
+*일정은 현지 또는 학교 사정에 따라 변경 및 취소될 수 있습니다.
+*공고문 및 특수조건을 충분히 숙지하신 후 견적서를 제출해주시기 바랍니다.</textarea>					  
+	</td>
+	</tr>
+	</table>
+	</td>
+	</tr>
+	<tr id="productionCheckId">
+	<td class="td_dark_blue">선택요청사항</td>
+	<td colspan="3" class="td_dark_gray">
+	<input type="checkbox" name="tcmu100VO.spotPaymentYN" style="vertical-align:middle;"  disabled> 내역서 요청
+	<input type="checkbox" name="tcmu100VO.productionCheck" style="vertical-align:middle;"  disabled> 직접생산확인서 요청
+	</td>
+	</tr>
+	<tr>
+	<td class="td_dark_blue">요청 목록</td>
+	<td colspan="3" class="td_dark_gray" style="padding-top:5px; padding-bottom:5px; height:auto">
+	<table width="98%" border="0" cellpadding="0" cellspacing="0">
+																                      
+	<tr>
+	<td height="27">
+	
+	<!--바로구매 물품목록에서 선택 시작--> 
+	<table width="630"  border="0" cellpadding="0" cellspacing="0" style="display:none;" id="goodsList">
+	<tr>
+	<td height="25" align="right"><img src="/S2BNCustomer/S2B/scrweb/images/school/button/btn_add.gif" width="74" height="18" style="cursor:hand; vertical-align:middle;" onclick="javascript:showGoodsList('2');"/></td>
+	</tr>
+	<tr>
+	<td>
+	
+	
+	
+	<table width="630" cellspacing="0" cellpadding="0" style="display:none;" id="dynamic_table3">
+	</table>
+	
+	</td> 
+	</tr>
+	</table>
+	<!--바로구매 물품목록에서 선택끝-->
+	
+	<!--첨부파일업로드 시작-->
+	
+	<table width="630"  border="0" cellpadding="0" cellspacing="0" id="goodsFile">
+	<tr><td colspan="2"><br>
+	
+	<a href="javascript:fileDownload('2026학년도 2학기 진로체험학습 차량 임차 재공고.hwp','20260928153244635275.hwp');"><b>[2026학년도 2학기 진로체험학습 차량 임차 재공고.hwp]</b></a><br>
+	
+	<a href="javascript:fileDownload('2026학년도 차량 임차 특수조건.hwp','20260928153244635276.hwp');"><b>[2026학년도 차량 임차 특수조건.hwp]</b></a><br>
+	
+	</td></tr>
+	</table><br>
+	
+	<!--첨부파일업로드 끝-->
+	
+	</td>
+	</tr>													
+	</table>
+	</td>
+	</tr>
+	</table>
+	</td>
+	</tr>	
+	<tr>
+	<td colspan="4" height="35" align="center">
+	<img src="/S2BNCustomer/S2B/scrweb/images/school/button/btn_list.gif" width="50" height="20" onclick="javascript:history.back();" style="cursor:hand" />
+	</td>
+	</tr>															
+	</table> 
+	<!--content end-->              
+	
+	
+	</td>
+	</tr>
+	</table>
+</form>
+</body>
+</html>

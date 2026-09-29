@@ -1,0 +1,377 @@
+
+
+
+
+
+
+
+
+
+
+
+
+<meta charset="euc-kr">
+<link href="/S2BNCustomer/S2B/scrweb/css/s_style_v2.css" rel="stylesheet" type="text/css">
+<link href="/S2BNCustomer/S2B/scrweb/css/style.css" rel="stylesheet" type="text/css">
+<link href="/S2BNCustomer/S2B/scrweb/css/main_style.css" rel="stylesheet" type="text/css">
+<LINK href="/S2BNCustomer/S2B/scrweb/css/school_tender_style.css" type="text/css" rel="stylesheet">
+<script type="text/javascript" src="/S2BNCustomer/S2B/scrweb/js/common.js"></script>
+<script type="text/javascript" src="/S2BNCustomer/S2B/scrweb/js/jscommon.js"></script>
+<script type="text/javascript" src="/S2BNCustomer/S2B/scrweb/js/my_scr.js"></script>
+<script type="text/javascript" src="/S2BNCustomer/S2B/scrweb/js/calendar.js"></script>
+<script type="text/javascript" src="/S2BNCustomer/S2B/scrweb/js/jindo.all.ns.js" charset="utf-8"></script>
+
+
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=euc-kr" />
+<LINK href="/S2BNCustomer/S2B/scrweb/css/school_tender_style.css" type=text/css rel=stylesheet>
+<title>S2B</title>
+<SCRIPT type="text/javascript">
+function fileDownload(fileName, uniqueFileName){
+
+	if(uniqueFileName==""){
+
+		uniqueFileName = fileName;
+
+	}
+
+	var url="http://www.s2b.kr/S2BNCustomer/S2B/FileDownload.jsp?FILENAME="+fileName+"&UNIQUEFILENAME="+uniqueFileName+"&gubun=estimation";
+/*
+	document.location.href = url;
+	document.getElementById("fileDown").src = url;
+	document.getElementById("fileDown").location.reload();
+*/
+	fileDown.location = url;
+}
+
+
+</SCRIPT>
+
+</head>
+
+<body oncontextmenu="return false">
+<form name="tcmo001Form" method="post" action="/S2BNCustomer/tcmo001.do" enctype="multipart/form-data">
+  <input type="hidden" name="pageNo" value="1">
+  <input type="hidden" name="forwardName" value="openViewTcmo11">
+
+	<!-- 파일다운로드시 새창 안띄우기 -->
+	<iframe id="fileDown" name="fileDown" style='visibility:hidden' src="" width="1" height="1"></iframe>
+	<!-- 파일다운로드시 새창 안띄우기 -->
+
+	<table width="100%" border="0" cellspacing="0" cellpadding="0">
+		<tr>
+		<td width="100%" valign="top">
+		<table width="100%" border="0" cellspacing="0" cellpadding="0">
+		<tr>
+		<td class="td_pd"></td>
+		</tr>
+		<tr>
+		<td background="/S2BNCustomer/S2B/scrweb/images/tender/title_back_img.gif">
+		<table width="100%" border="0" cellspacing="0" cellpadding="0">
+		<tr>
+		<td width="210"><img src="/S2BNCustomer/S2B/scrweb/images/condition/cont_title_03.gif" width="323" height="37" border="0" /></td>
+		<td class="table_navi"><img src="/S2BNCustomer/S2B/scrweb/images/tender/dot_navi.gif" width="10" height="10" border="0" style="vertical-align:middle"/>HOME&gt;계약현황&gt;견적서 제출 요청</td>
+		</tr>
+		</table>
+		</td>
+		</tr>
+		<tr>
+		<td class="td_pd"></td>
+		</tr>
+		<tr>
+		<td>
+		<!-- contents start -->
+		<table width="100%" border="0" cellspacing="0" cellpadding="0">
+		<tr>
+		<td>
+		<table width="100%" border="0" cellspacing="0" cellpadding="0" style="table-layout:fixed" class="table_line">
+		<colgroup>
+			<col width="20%" />
+			<col width="30%" />
+			<col width="20%" />
+			<col width="30%" />
+		</colgroup>
+		<tr>
+		<td width="130" class="td_dark_blue">수요기관명</td>
+		<td width="260" class="td_dark_gray"> 부산관광고등학교</td>
+		<td width="130" class="td_dark_blue">견적요청자명</td>
+		<td width="260" class="td_dark_gray">김준권</td>
+		</tr>
+		<tr>
+		<td rowspan="2" class="td_dark_blue">거래구분</td>
+		<td colspan="3" class="td_dark_gray">
+		<input type="radio" name="tcmu100VO.businessType" value="1" checked="checked" onfocus="setRadioCl(event)" style="vertical-align:middle;" disabled>총액계약
+		</td>
+		</tr>
+		<tr>
+		<td class="td_dark_gray">
+		<input name="tcmu100VO.estimateSection" type="radio" class="button" value="1"  style="vertical-align:middle;" disabled>물품
+		<input name="tcmu100VO.estimateSection" type="radio" class="button" value="2"  style="vertical-align:middle;" disabled>공사
+		<input name="tcmu100VO.estimateSection" type="radio" class="button" value="3" checked style="vertical-align:middle;" disabled>용역
+		</td>
+		<td width="130" class="td_dark_blue">분류</td>
+		<td width="260" class="td_dark_gray">
+		<select name="estimateCategory" style="width: 200px; height:auto;" class="select_input" disabled>
+		
+		
+		
+		
+		
+		<option value="ZD000001" >건강검진</option>
+		
+		<option value="ZD000002" selected>서비스용역</option>
+		
+		<option value="ZD000003" >설계/감리</option>
+		
+		<option value="ZD000004" >숙박</option>
+		
+		<option value="ZD000005" >안전관리</option>
+		
+		<option value="ZD000006" >안전진단</option>
+		
+		<option value="ZD000007" >여행사</option>
+		
+		<option value="ZD000010" >전세버스</option>
+		
+		<option value="ZD000011" >청소/위생/경비용역</option>
+		
+		<option value="ZD000012" >폐기물처리</option>
+		
+		<option value="ZD000013" >행사</option>
+		
+		<option value="ZD000017" >기타 일반용역</option>
+		
+		<option value="ZD000018" >기타 기술용역</option>
+		
+		
+		
+		</select>
+		</td>
+		</tr>
+		<tr>
+		<td class="td_dark_blue">견적서 제출요청명</td>
+		<td colspan="3" class="td_dark_gray">
+		BMICE 2학년 진로 취업역량강화 캠프 실시
+		</td>
+		</tr>
+		<tr>
+		<td width="130" class="td_dark_blue">계약상대자결정</td>
+		<td width="260" class="td_dark_gray"> 가장 경제적인 가격</td>
+		<td width="130" class="td_dark_blue">예가방법</td>
+		<td width="260" class="td_dark_gray">
+		
+		<select name="tcmu100VO.bidMethod" class="select_input" style="width:100px; height:auto;" disabled>
+		<option value="1" checked>비예가</option>
+		<option value="3" >단일예가</option>
+		</select>
+		
+		</td>
+		</tr>
+		<tr>
+		<td class="td_dark_blue" style="height:auto">견적제출 공급업체</td>
+		<td colspan="3" class="td_dark_gray" style="padding-top:5px; padding-bottom:5px; height:auto">
+		<table width="98%" border="0" cellspacing="0" cellpadding="0">
+		<tr>
+		<td>
+		<input id="oestimateCompany1" type="radio" name="tcmu100VO.estimateCompany" value="1"  style="vertical-align:middle;" disabled/>전체공개
+		<input id="oestimateCompany3" type="radio" name="tcmu100VO.estimateCompany" value="3"  style="vertical-align:middle;" disabled/><span id="oestimateCompany3Text">지역 선택</span>
+		<input id="oestimateCompany2" type="radio" name="tcmu100VO.estimateCompany" value="2" checked style="vertical-align:middle;" disabled/>공급업체 선택
+		</td>
+		</tr>
+		<!--지역제한선택시작-->
+		<tr>
+		<td height="5" bgcolor="#FFFFFF"></td>
+		</tr>
+		<tr>
+		<td>
+		
+		
+		
+		</td>
+		</tr>
+		<!--지역제한선택끝--> 
+		<!--공급업체선택시작-->
+		<tr><td height="5" bgcolor="#FFFFFF"></td></tr>
+		<tr>
+		<td>
+		
+		<div id="companyLimit">
+		<table width="600" border="0" cellpadding="0" cellspacing="0"  align="center" class="view_box2" id="dynamic_table">
+		<tr>
+		<td width="600" class="ali_cen view_line01"><strong>공급업체명</strong></td>
+		</tr>
+		
+		<tr>
+		<td width="600" class="ali_cen view_line03">XXXXX</td>
+		</tr>
+		
+		<tr>
+		<td width="600" class="ali_cen view_line03">XXXXX</td>
+		</tr>
+		
+		<tr>
+		<td width="600" class="ali_cen view_line03">XXXXX</td>
+		</tr>
+		
+		</table>
+		</div>
+		
+		
+		</td>
+		</tr>
+		<!--공급업체선택끝---->
+		</table>
+		</td>
+		</tr>
+		<tr>
+		<td class="td_dark_blue">견적제출 요청일</td>
+		<td colspan="3" class="td_dark_gray" style="vertical-align:middle;"><!-- style="height:50px;"-->
+		  2026-09-11 13:50
+		</td>
+		</tr>
+		<tr>
+		<td class="td_dark_blue">접수기간</td>
+		<td colspan="3" class="td_dark_gray" style="padding-top:5px; padding-bottom:5px; height:auto"><!-- style="height:50px;"-->
+		  시작일 : 2026-09-11 13:50 ~ 마감일 : 2026-09-16 13:50
+		</td>
+		</tr>
+		
+		<tr>
+		<td width="130" class="td_dark_blue">결제방법</td>
+		<td width="260" class="td_dark_gray">
+		<select id="tcmu100VO.payableType" name="tcmu100VO.payableType" class="select_input" style="width: 100px; " disabled>
+		<option value="1" selected>계좌입금</option>
+		<option value="2" >구매카드</option>
+		</select>
+		</td>
+		<td width="130" class="td_dark_blue">결제조건</td>
+		<td width="260" class="td_dark_gray">
+		<select id="tcmu100VO.termsCode" name="tcmu100VO.termsCode" onChange="javascript:check();" class="select_input" style="width: 150px; " disabled>
+		<option value="" >- 선택하세요 -</option>
+		<option value="ZD000411" >검수 후 즉시 결제</option>
+		<option value="ZD000412" >검수 후 7일 이내 결제</option>
+		<option value="ZD000413" >검수 후 15일 이내 결제</option>
+		<option value="ZD000452" >대금청구 후 5일 이내(공휴일 및 토요일 제외)</option>
+		<option value="ZD000453" selected>대금청구 후 10일 이내(공휴일 및 토요일 제외)</option>
+		</select>
+		
+		</td>
+		</tr>
+		<tr>
+		<td width="130" class="td_dark_blue">요청배송방법</td>
+		<td width="260" class="td_dark_gray">
+		<select id="tcmu100VO.deliveryConditionCode" name="tcmu100VO.deliveryConditionCode" class="select_input" style="width: 100px; " disabled>
+		<option value="" >-선택하세요-</option>
+		<option value="ZD000053" selected>상관없음</option>
+		<option value="ZD000051" >직배송</option>
+		<option value="ZD000052" >택배</option>
+		<option value="ZD000054" >소포</option>
+		<option value="ZD000055" >설치</option>
+		</select>
+		<input type="checkbox" name="tcmu100VO.deliveryOption" style="vertical-align:middle;"  disabled/>도서/산간지역배송
+		</td>
+		<td width="130" class="td_dark_blue">계약기간</td>
+		<td width="260" class="td_dark_gray">
+		  20260921~20260922
+		</td>
+		</tr>
+		<tr>
+		<td class="td_dark_blue">납품장소</td>
+		<td colspan="3" class="td_dark_gray">
+		<select id="tcmu100VO.deliveryCode" name="tcmu100VO.deliveryCode" onChange="javascript:check2();" class="select_input" style="width: 100px; " disabled>
+			<option value="" >-선택하세요-</option>
+			<option value="ZD000415" >행정실</option>
+	        <option value="ZD000416" >교무실</option>
+	        <option value="ZD000417" >보건실</option>
+	        <option value="ZD000451" selected>직접입력</option>
+		</select>
+		
+		<input type="text" name="tcmu100VO.deliveryLocation" id="deliveryLocation" class="blue_input" size="50" style="height:20px" maxlength="100" value="해운대 일대" disabled>
+		
+		</td>
+		</tr>
+		<tr>
+		<td class="td_dark_blue">주요 요청사항</td>
+		<td colspan="3" class="td_dark_gray" style="padding-top:5px; padding-bottom:5px; height:auto">
+		<table width="99%"  border="0" cellpadding="0" cellspacing="0">
+		<tr>
+		<td class="view_box" height="30">
+		<textarea name="tcmu100VO.quality" style="width:100%;" rows="5" class="view_text" disabled>기타문의사항
+행정실: 051-248-3126</textarea>
+		</td>
+		</tr>
+		</table>
+		</td>
+		</tr>
+		<tr id="productionCheckId">
+		<td class="td_dark_blue">선택요청사항</td>
+		<td colspan="3" class="td_dark_gray">
+		<input type="checkbox" name="tcmu100VO.spotPaymentYN" style="vertical-align:middle;" checked disabled> 내역서 요청
+		<input type="checkbox" name="tcmu100VO.productionCheck" style="vertical-align:middle;"  disabled> 직접생산확인서 요청
+		</td>
+		</tr>
+		<tr>
+		<td class="td_dark_blue">관련서류첨부<br>예)물품사양서,<br>공사내역서 등</td>
+		<td colspan="3" class="td_dark_gray" style="padding-top:5px; padding-bottom:5px; height:auto">
+		<table width="98%" border="0" cellpadding="0" cellspacing="0">
+		<tr>
+		<td height="27">
+		<!--바로구매 물품목록에서 선택 시작-->
+		<table width="630"  border="0" cellpadding="0" cellspacing="0" style="display:none;" id="goodsList">
+		<tr>
+		<td height="25" align="right"><img src="/S2BNCustomer/S2B/scrweb/images/school/button/btn_add.gif" width="74" height="18" style="cursor:hand; vertical-align:middle;" onclick="javascript:showGoodsList('2');"/></td>
+		</tr>
+		<tr>
+		<td>
+		
+		
+		
+		<table width="630" cellspacing="0" cellpadding="0" style="display:none;" id="dynamic_table3">
+		</table>
+		
+		</td>
+		</tr>
+		</table>
+		<!--바로구매 물품목록에서 선택끝-->
+		
+		<!--첨부파일업로드 시작-->
+		
+		<table width="630"  border="0" cellpadding="0" cellspacing="0" id="goodsFile">
+		<tr>
+		<td colspan="2"><br>
+		
+		</td>
+		</tr>
+		</table>
+		<br>
+		
+		<!--첨부파일업로드 끝-->
+		</td>
+		</tr>
+		</table>
+		</td>
+		</tr>
+		</table>
+		</td>
+		</tr>
+		<tr>
+		<td colspan="4" height="35" align="center">
+		<img src="/S2BNCustomer/S2B/scrweb/images/school/button/btn_list.gif" width="50" height="20" onclick="javascript:history.back();" style="cursor:hand" />
+		</td>
+		</tr>
+		</table>
+		<!-- contents end -->
+		</td>
+		</tr>
+		</table>
+		</td>
+  		</tr>
+	</table> 
+</form>
+</body>
+</html>
