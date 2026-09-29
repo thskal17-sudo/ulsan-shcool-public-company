@@ -69,6 +69,15 @@ CREATE TABLE IF NOT EXISTS camp_bids (
     first_seen_at TEXT NOT NULL,
     reported_at   TEXT
 );
+CREATE TABLE IF NOT EXISTS camp_runs (
+    run_at   TEXT NOT NULL,
+    scanned  INTEGER,
+    matched  INTEGER,
+    new      INTEGER,
+    calls    INTEGER,
+    errors   INTEGER,
+    diag     TEXT
+);
 """
 
 
@@ -224,6 +233,7 @@ class G2BClient:
         self.http = http
         self.key = key
         self.calls = 0
+        self.region_samples: list[dict] = []  # 진단용: 참가가능지역 응답 몇 건을 DB 에 남긴다
 
     def _get(self, op: str, params: dict) -> tuple[list[dict], int]:
         query = {"ServiceKey": self.key, "type": "json", **params}
@@ -250,7 +260,13 @@ class G2BClient:
         return rows
 
     def regions(self, bid_no: str, bid_ord: str) -> list[str]:
-        items, _ = self._get(REGION_OP, {"inqryDiv": "2", "bidNtceNo": bid_no, "numOfRows": 100, "pageNo": 1})
+        """참가가능지역명 목록 ([] = 제한 없음). 참가가능지역은 차수 단위라 bidNtceOrd 를 함께 보낸다."""
+        items, total = self._get(
+            REGION_OP,
+            {"inqryDiv": "2", "bidNtceNo": bid_no, "bidNtceOrd": bid_ord or "000", "numOfRows": 100, "pageNo": 1},
+        )
+        if len(self.region_samples) < 5:
+            self.region_samples.append({"bid_no": bid_no, "ord": bid_ord, "total": total, "items": items[:3]})
         same_ord = [i for i in items if not bid_ord or str(i.get("bidNtceOrd", bid_ord)) == bid_ord] or items
         names = []
         for i in same_ord:
@@ -277,7 +293,7 @@ def _won(value) -> int | None:
         n = int(float(str(value).replace(",", "")))
     except (TypeError, ValueError):
         return None
-    return n if n > 0 else None
+    return n if n >= 100_000 else None  # 0·1000원처럼 금액을 가려 둔 값은 모름으로 본다
 
 
 def to_bid(item: dict) -> Bid:
@@ -378,6 +394,17 @@ class CampStore:
         ts = now.isoformat(timespec="seconds")
         self.conn.executemany("UPDATE camp_bids SET reported_at = ? WHERE bid_no = ?", [(ts, n) for n in bid_nos])
 
+    def log_run(self, out: "CampOutcome", diag: dict) -> None:
+        self.conn.execute(
+            "INSERT INTO camp_runs VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (out.now.isoformat(timespec="seconds"), out.scanned, out.matched, len(out.new), out.calls,
+             out.region_errors, json.dumps(diag, ensure_ascii=False)),
+        )
+        # 진단 기록은 최근 60회만 남긴다
+        self.conn.execute(
+            "DELETE FROM camp_runs WHERE rowid NOT IN (SELECT rowid FROM camp_runs ORDER BY run_at DESC LIMIT 60)"
+        )
+
     def commit(self) -> None:
         self.conn.commit()
 
@@ -425,7 +452,9 @@ def run_camp(
     now: datetime | None = None,
     client: G2BClient | None = None,
     lookback_days: int | None = None,
+    recheck: bool = False,
 ) -> CampOutcome:
+    """recheck: 아직 메일로 알리지 않은 공고의 참가가능지역을 저장된 값 대신 다시 조회한다."""
     cfg = load_camp_config(config_dir)
     now = now or now_kst()
     now_naive = now.replace(tzinfo=None)  # API 시각은 한국 시간(시간대 표기 없음)
@@ -435,7 +464,9 @@ def run_camp(
         begin = (now_naive - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
         client = client or G2BClient(Http(min_interval=0.3, max_seconds=90), service_key())
         raw = client.list_services(begin, now_naive)
+        raw_by_no = {str(i.get("bidNtceNo") or ""): i for i in raw}
         bids = latest_per_notice([to_bid(i) for i in raw])
+        diag: dict = {"begin": begin.isoformat(), "list_region_fields": {}}
         out = CampOutcome(now=now, scanned=len(bids))
 
         for b in bids:
@@ -443,6 +474,10 @@ def run_camp(
                 continue
             out.matched += 1
             out.methods[b.method or "(없음)"] = out.methods.get(b.method or "(없음)", 0) + 1
+            if len(diag["list_region_fields"]) < 5:  # 목록 응답에 지역 제한 칸이 있는지 진단
+                fields = {k: v for k, v in raw_by_no.get(b.bid_no, {}).items()
+                          if re.search(r"rgn|Rgn|lmt|Lmt|Lcl|lcl", k) and v not in (None, "")}
+                diag["list_region_fields"][b.bid_no] = fields
             row = store.known(b.bid_no)
             if "취소" in b.notice_kind:
                 if row is not None:  # 이미 알린 공고가 취소되면 마감임박 목록에서 빠지게 표시만 바꾼다
@@ -451,7 +486,8 @@ def run_camp(
                 continue
             if b.close_at is not None and b.close_at < now_naive:
                 continue  # 이미 마감
-            if row is not None and row["regions"] is not None:
+            cached = row is not None and row["regions"] is not None
+            if cached and not (recheck and row["reported_at"] is None):
                 b.regions = json.loads(row["regions"])
             else:
                 try:
@@ -461,11 +497,15 @@ def run_camp(
                     out.region_errors += 1
             b.tier = tier_of(b, cfg)
             store.save(b, now)
-        store.commit()
         out.calls = client.calls
+        diag["methods"] = out.methods
+        diag["region_samples"] = getattr(client, "region_samples", [])
+        store.commit()
 
         order = {t: i for i, t in enumerate(TIERS)}
         out.new = sorted((b for b in store.unreported() if b.tier in TIERS), key=lambda b: (order.get(b.tier, 9), b.close_at or datetime.max))
+        store.log_run(out, diag)
+        store.commit()
         soon_until = now_naive + timedelta(days=cfg.closing_soon_days + 1)
         out.closing_soon = [
             b for b in store.open_reported(now_naive)

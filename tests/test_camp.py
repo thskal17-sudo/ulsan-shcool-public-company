@@ -185,3 +185,30 @@ def test_html_renders(cfg):
                    close_at=datetime(2026, 10, 6, 10, 0))]
     html = camp.camp_html(out, cfg)
     assert "진로캠프 &lt;운영&gt;" in html and "1,500만원" in html and "D-6" in html and "제한없음" in html
+
+
+def test_first_run_noise_is_excluded(cfg):
+    for title in [
+        "2027학년도 수시 및 정시 실기(면접)고사 채점 솔루션 렌탈업체 선정",
+        "2026학년도 환일고등학교 2학기 숙박형 현장체험학습(스키캠프) 위탁",
+        "「2026 중등영어 겨울방학캠프」 운영 용역",
+        "2026. G-글로컬 다산 리더스 국외 캠프 위탁 용역",
+        "4대 과학기술원 창업리그「GRAVITY 2026」창업활동비 회계정산 용역",
+        "창업지원 성과분석 및 발전방안",
+    ]:
+        assert not matches(title, cfg), title
+    assert matches("2026학년도 지피지기 취업불패 취업캠프(간호학과) 운영 용역", cfg)
+
+
+def test_hidden_price_is_unknown():
+    assert to_bid(item("X", "취업캠프", price="1000")).price is None
+
+
+def test_recheck_looks_up_unreported_regions_again(tmp_path):
+    db = tmp_path / "p.db"
+    run_camp(db_path=db, send_mail=False, config_dir=ROOT / "config", now=NOW,
+             client=FakeClient([item("R1", "진로캠프 운영")], {"R1": []}))
+    again = FakeClient([item("R1", "진로캠프 운영")], {"R1": ["울산광역시"]})
+    out = run_camp(db_path=db, send_mail=False, config_dir=ROOT / "config", now=NOW, client=again, recheck=True)
+    assert again.region_calls == ["R1"]
+    assert [(b.bid_no, b.tier) for b in out.new] == [("R1", TIER_REF)]
