@@ -6,6 +6,11 @@
     md_report  경남·대학평생교육원 저장소가 매일 커밋하는 reports/YYYY-MM-DD.md
     (캠프 수주는 이 저장소 DB 의 camp_bids / camp_runs)
 
+강사잇다 운영 (config/briefing.yaml 의 gangsaitda, 9/29 추가)
+    합본 엑셀  울산 DB 의 마감 전 공고 + 경남·평생교육원 저장소가 매일 커밋하는 reports/gangsaitda/latest.xlsx
+               (그날 보고서가 도착한 곳만) → 강사잇다 양식 한 파일로 합쳐 메일에 첨부. 제목·기관이 같은 줄은 하나만.
+    공유 글    오늘 새 공고 제목·지역·D-day 로 강사방에 붙여 넣을 요약 글을 메일 맨 아래에 넣는다.
+
 보내는 때
     수집 워크플로가 끝날 때마다(workflow_run)와 예비 예약 때 실행된다. 모든 곳의 오늘 자료가
     도착했으면 보내고, 아직이면 기다린다. send_anyway_after(KST)가 지나면 도착한 것만으로 보낸다.
@@ -77,6 +82,8 @@ class Briefing:
     sections: list[Section]
     camp: CampSummary
     links: list[dict] = field(default_factory=list)
+    upload: "UploadFile | None" = None  # 강사잇다 합본 엑셀
+    share_text: str = ""  # 강사방 공유용 요약 글
 
     @property
     def all_ready(self) -> bool:
@@ -280,6 +287,159 @@ def http_fetch(url: str) -> bytes | None:
         raise
 
 
+# ---------------------------------------------------------------- 강사잇다 운영: 합본 엑셀·공유 글
+
+
+@dataclass
+class UploadFile:
+    path: Path | None = None
+    rows: int = 0
+    held: int = 0  # '보류' 줄 (마감일 확인 필요)
+    by_region: dict[str, int] = field(default_factory=dict)
+    missing: list[str] = field(default_factory=list)  # 이번 파일에 못 넣은 곳 (도착 전·읽기 실패)
+
+
+def _as_date(value) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    m = re.search(r"(\d{4})[-./]\s*(\d{1,2})[-./]\s*(\d{1,2})", str(value or ""))
+    if m:
+        try:
+            return date(int(m[1]), int(m[2]), int(m[3]))
+        except ValueError:
+            return None
+    return None
+
+
+def _ulsan_rows(db: Path, today: date, config_dir: Path) -> list[dict]:
+    """울산 수집 DB 의 마감 전 공고 → 강사잇다 양식 줄 (지역 메일에 붙는 파일과 같은 기준)."""
+    from .config import load_rules, load_settings
+    from .gangsaitda import row_values
+    from .report_excel import sort_key
+    from .storage import Store
+
+    rules = load_rules(config_dir)
+    names = {s.id: s.name for s in load_settings(config_dir).sources}
+    statuses = ("모집중", "결과공고") if rules.keep_result_notices else ("모집중",)
+    store = Store(db)
+    try:
+        active = sorted(store.active(today, rules.active_max_age_days, statuses), key=lambda p: sort_key(p, today))
+    finally:
+        store.close()
+    return [row_values(p, names.get(p.source_id, "")) for p in active]
+
+
+def _key(row: dict) -> str:
+    return re.sub(r"\s+", "", str(row.get("제목", ""))) + "|" + re.sub(r"\s+", "", str(row.get("기관명", "")))
+
+
+def build_upload(cfg: dict, b: Briefing, local_db: Path | None, fetch, out_dir: Path,
+                 config_dir: Path = DEFAULT_CONFIG_DIR) -> UploadFile:
+    """세 지역 강사잇다 양식을 한 파일로. 오늘 보고서가 도착한 곳만 넣는다 (어제 파일이 섞이지 않게)."""
+    from .gangsaitda import HOLD, TEMPLATE_NAME, read_rows, write_rows
+
+    out = UploadFile()
+    rows: list[dict] = []
+    by_id = {s.id: s for s in b.sections}
+    for src in cfg.get("sources", []):
+        if src.get("enabled", True) is False:
+            continue
+        name = src["name"]
+        sec = by_id.get(src["id"])
+        try:
+            if src["type"] == "ulsan_db" and not src.get("repo"):
+                if local_db is None or not local_db.exists():
+                    out.missing.append(name)
+                    continue
+                got = _ulsan_rows(local_db, b.today, config_dir)
+            elif src.get("upload_url"):
+                if sec is None or not sec.ready or sec.error:
+                    out.missing.append(name)
+                    continue
+                body = fetch(src["upload_url"])
+                if body is None:
+                    out.missing.append(name)
+                    continue
+                got = read_rows(body)
+                for r in got:
+                    r["메모"] = " · ".join(x for x in (f"{name} 수집", str(r.get("메모") or "")) if x)
+            else:
+                continue
+        except Exception as exc:  # noqa: BLE001 — 한 곳이 깨져도 나머지로 만든다
+            out.missing.append(f"{name}(읽기 실패: {type(exc).__name__})")
+            continue
+        # 캐시 등으로 지난 파일이 섞여도 마감이 지난 줄은 올라가지 않으니 뺀다
+        got = [r for r in got if not (_as_date(r.get("마감일")) and _as_date(r.get("마감일")) < b.today)]
+        out.by_region[name] = len(got)
+        rows.extend(got)
+    seen: set[str] = set()
+    merged = []
+    for r in rows:
+        k = _key(r)
+        if k in seen:
+            continue
+        seen.add(k)
+        merged.append(r)
+    merged.sort(key=lambda r: (r.get("처리") == HOLD, _as_date(r.get("마감일")) or date.max, str(r.get("지역", ""))))
+    out.rows = len(merged)
+    out.held = sum(1 for r in merged if r.get("처리") == HOLD)
+    if merged:
+        out.path = write_rows(out_dir / f"강사잇다_부울경_{b.today.isoformat()}.xlsx", merged,
+                              config_dir / TEMPLATE_NAME)
+    return out
+
+
+def _place(it: Item, sec: Section) -> str:
+    if sec.id == "ulsan":
+        return "울산"
+    first = re.split(r"[,·]", it.region or "")[0].strip()
+    return first or sec.name
+
+
+def share_text(b: Briefing, cfg: dict) -> str:
+    """강사방에 그대로 붙여 넣을 오늘의 공고 요약 (제목·지역·D-day 만. 기관·지원 방법은 사이트에서)."""
+    from .gangsaitda import clean_title
+
+    g = cfg.get("gangsaitda") or {}
+    site = str(g.get("site_url") or "").strip() or "[사이트 주소]"
+    limit = int(g.get("share_max", 10))
+    d = b.today
+    day = f"{d.month}/{d.day}({WEEKDAYS[d.weekday()]})"
+    ready = [s for s in b.sections if s.ready and not s.error]
+
+    def pick(attr: str) -> list[tuple[Item, Section]]:
+        seen: set[str] = set()
+        out = []
+        pairs = [(i, s) for s in ready for i in getattr(s, attr)]
+        for i, s in sorted(pairs, key=lambda x: (x[0].deadline or date.max, x[0].title)):
+            k = re.sub(r"\s+", "", i.title)
+            if k not in seen:
+                seen.add(k)
+                out.append((i, s))
+        return out
+
+    new = pick("new")
+    today_close = {re.sub(r"\s+", "", i.title) for s in ready for i in s.new + s.closing if i.deadline == d}
+    if new:
+        head = f"[오늘의 부울경 강사 공고] {day} 새 공고 {len(new)}건"
+        items = new
+    else:
+        items = pick("closing")
+        head = f"[오늘의 부울경 강사 공고] {day} 새 공고는 없고 마감 임박 {len(items)}건"
+    if new and today_close:
+        head += f" · 오늘 마감 {len(today_close)}건"
+    lines = [head]
+    for i, s in items[:limit]:
+        dd = dday_label(i.deadline, d) if i.deadline else "마감 확인"
+        lines.append(f"- {clean_title(i.title)} ({_place(i, s)} · {dd})")
+    if len(items) > limit:
+        lines.append(f"외 {len(items) - limit}건")
+    lines.append(f"전체 보기: {site}")
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------- 메일
 
 
@@ -377,6 +537,24 @@ def html_body(b: Briefing, limit: int = 15) -> str:
         items = ", ".join(f"{n} {p}" for n, p in problems)
         parts.append(f"<p style='color:#b45309;font-size:13px;margin-top:14px'>⚠ 수집이 실패한 곳: {escape(items)}"
                      " — 지역별 메일 아래쪽에 자세한 이유가 있습니다.</p>")
+    # 3. 강사잇다 운영: 합본 엑셀 안내 + 강사방 공유 글
+    parts.append("<h3 style='margin:18px 0 4px;border-bottom:2px solid #1f4e78'>📋 강사잇다 올리기 · 강사방 공유</h3>")
+    up = b.upload
+    if up is not None and up.path is not None:
+        regions = ", ".join(f"{k} {v}" for k, v in up.by_region.items())
+        parts.append(
+            f"<p style='margin:4px 0'>📎 첨부 <b>{escape(up.path.name)}</b> — 세 지역 마감 전 공고 <b>{up.rows}</b>줄 ({escape(regions)})"
+            + (f", 그중 마감일을 못 찾은 {up.held}줄은 '처리' 칸에 '보류'" if up.held else "")
+            + ". 강사잇다 관리자 화면 <b>/admin/jobs/upload</b> 에 이 파일 하나만 올리면 됩니다.</p>")
+    if up is not None and up.missing:
+        parts.append(f"<p style='margin:4px 0;color:#b45309;font-size:13px'>합본에 빠진 곳: {escape(', '.join(up.missing))}"
+                     " — 그 지역 메일의 엑셀을 따로 올려 주세요.</p>")
+    if b.share_text:
+        parts.append("<p style='margin:10px 0 4px'><b>강사방에 붙여 넣을 글</b> (그대로 복사)</p>"
+                     "<pre style=\"white-space:pre-wrap;font-family:'Malgun Gothic',sans-serif;font-size:14px;"
+                     "background:#f6f8fa;border:1px solid #ddd;padding:10px 12px;margin:0\">"
+                     f"{escape(b.share_text)}</pre>")
+
     parts.append("<p style='color:#888;font-size:12px;margin-top:16px'>지역별 메일은 그대로 따로 나갑니다. "
                  "이 브리핑은 GitHub Actions 에서 매일 아침 자동으로 보냅니다.</p></div>")
     return "".join(parts)
@@ -384,6 +562,8 @@ def html_body(b: Briefing, limit: int = 15) -> str:
 
 def text_body(b: Briefing) -> str:
     lines = [subject_line(b), ""]
+    if b.share_text:
+        lines += ["[강사방에 붙여 넣을 글]", b.share_text, ""]
     for label, items in (("캠프 바로지원", b.camp.go), ("캠프 검토", b.camp.review)):
         for i in items:
             lines.append(f"[{label}] {i.deadline_text or '-'} | {i.org} | {i.title}\n  {i.url}")
@@ -427,11 +607,20 @@ def run_briefing(
     now: datetime | None = None,
     fetch=None,
     out_html: Path | None = None,
+    out_dir: Path | None = None,
 ) -> BriefingOutcome:
     cfg = load_config(config_dir)
     now = now or now_kst()
     today = now.date()
-    b = gather(cfg, today, db_path, fetch or http_fetch)
+    fetch = fetch or http_fetch
+    b = gather(cfg, today, db_path, fetch)
+    if cfg.get("gangsaitda", {}).get("enabled", True):
+        b.share_text = share_text(b, cfg)
+        try:
+            out_dir = out_dir or (out_html.parent if out_html else Path(tempfile.mkdtemp()))
+            b.upload = build_upload(cfg, b, db_path, fetch, out_dir, config_dir)
+        except Exception as exc:  # noqa: BLE001 — 엑셀이 실패해도 브리핑은 보낸다
+            b.upload = UploadFile(missing=[f"합본 엑셀 실패: {type(exc).__name__}: {exc}"[:200]])
     already = state_path.exists() and state_path.read_text(encoding="utf-8").strip() == today.isoformat()
     go, reason = should_send(b, now, cfg, already, force)
     html = html_body(b, int(cfg.get("max_items", 15)))
@@ -448,7 +637,8 @@ def run_briefing(
         raise RuntimeError("BRIEFING_TO 미설정: 브리핑 받을 주소를 GitHub Secret 에 등록하세요.")
     cfg_mail = MailConfig.from_env()
     cfg_mail.to = to
-    send(cfg_mail, build_message(cfg_mail, subject_line(b), html, text_body(b), None))
+    attachment = b.upload.path if b.upload is not None else None
+    send(cfg_mail, build_message(cfg_mail, subject_line(b), html, text_body(b), attachment))
     state_path.parent.mkdir(parents=True, exist_ok=True)
     state_path.write_text(today.isoformat(), encoding="utf-8")
     outcome.sent = True

@@ -32,7 +32,7 @@ _EXTRA_COLUMNS = {
     "메모": (50, "강사잇다에는 올라가지 않는 참고 칸이에요 (수집한 게시판, 확인할 점)."),
 }
 
-_YEAR = re.compile(r"(?<!\d)(?:19|20)\d{2}\s*(?:학년도|년도|년)\s*")
+_YEAR = re.compile(r"(?<!\d)(?:19|20)\d{2}\s*(?:학년도|년도|년|\.(?!\s*\d))\s*")  # '2026학년도', '2026. 방과후'
 _PAREN_DATE = re.compile(r"\s*\([^()]*\d{1,2}\s*[./]\s*\d{1,2}[^()]*\)")
 _TRAILING_RANGE = re.compile(r"\s+\d{1,2}\s*[./]\s*\d{1,2}\.?\s*[~\-–]\s*\d{1,2}\s*[./]\s*\d{1,2}\.?\s*$")
 
@@ -97,6 +97,12 @@ def build_gangsaitda(
     path: Path, postings: list[Posting], source_names: dict[str, str], template: Path
 ) -> Path:
     """양식 원본을 복사해 공고를 채운 파일을 path 에 저장한다 (postings 순서대로)."""
+    rows = [row_values(p, source_names.get(p.source_id, "")) for p in postings]
+    return write_rows(path, rows, template)
+
+
+def write_rows(path: Path, rows: list[dict[str, object]], template: Path) -> Path:
+    """양식 원본을 복사해 rows(칸 이름 → 값)를 '공고' 시트에 한 줄씩 채워 path 에 저장한다."""
     wb = load_workbook(template)
     ws = wb[SHEET]
     columns = {str(c.value).strip(): c.column for c in ws[1] if c.value}
@@ -113,18 +119,34 @@ def build_gangsaitda(
 
     body_font = Font(name=header_style.font.name, size=header_style.font.sz)
     wrap = Alignment(wrap_text=True, vertical="top")
-    for n, p in enumerate(postings, start=2):
-        values = row_values(p, source_names.get(p.source_id, ""))
+    for n, values in enumerate(rows, start=2):
         for name, col in columns.items():
             value = values.get(name)
             cell = ws.cell(row=n, column=col, value=value if value not in ("", None) else None)
             cell.font, cell.alignment = body_font, wrap
             if name == "원문 링크" and value:
                 cell.hyperlink = str(value)
-    if postings:
+    if rows:
         last = max(columns.values())
-        ws.auto_filter.ref = f"A1:{ws.cell(row=1, column=last).column_letter}{len(postings) + 1}"
+        ws.auto_filter.ref = f"A1:{ws.cell(row=1, column=last).column_letter}{len(rows) + 1}"
     wb.active = wb.index(ws)
     path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(path)
     return path
+
+
+def read_rows(data: bytes) -> list[dict[str, object]]:
+    """다른 저장소가 만든 강사잇다 양식 파일의 '공고' 시트 → 줄마다 {칸 이름: 값} (빈 줄은 뺀다)."""
+    from io import BytesIO
+
+    wb = load_workbook(BytesIO(data), read_only=True, data_only=True)
+    ws = wb[SHEET] if SHEET in wb.sheetnames else wb.worksheets[0]
+    rows = ws.iter_rows(values_only=True)
+    header = [str(v).strip() if v is not None else "" for v in next(rows, ())]
+    out = []
+    for values in rows:
+        row = {name: value for name, value in zip(header, values) if name and value not in (None, "")}
+        if row.get("제목"):
+            out.append(row)
+    wb.close()
+    return out
