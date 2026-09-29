@@ -104,6 +104,7 @@ def cmd_camp(args) -> int:
             send_mail=not args.no_mail,
             config_dir=Path(args.config),
             lookback_days=args.days,
+            recheck=args.recheck,
         )
     except G2BError as exc:
         print(f"캠프 수주 공고: {exc}")
@@ -175,6 +176,7 @@ def main(argv: list[str] | None = None) -> int:
     p_camp.add_argument("--db", default="data/postings.db")
     p_camp.add_argument("--no-mail", action="store_true", help="메일을 보내지 않음 (새 공고 표시도 유지)")
     p_camp.add_argument("--days", type=int, default=None, help="최근 며칠치 공고를 볼지 (기본: config/camp.yaml)")
+    p_camp.add_argument("--recheck", action="store_true", help="아직 안 알린 공고의 참가가능지역을 다시 조회")
     p_camp.set_defaults(func=cmd_camp)
 
     p_mail = sub.add_parser("send-test-mail", help="메일 설정 확인")

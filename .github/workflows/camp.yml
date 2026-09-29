@@ -15,6 +15,10 @@ on:
         description: "최근 며칠치 공고를 볼지 (비우면 기본값: 처음 10일, 이후 2일)"
         required: false
         default: ""
+      recheck:
+        description: "아직 메일로 안 알린 공고의 참가가능지역을 다시 조회"
+        type: boolean
+        default: false
 
 permissions:
   contents: write # state 브랜치에 수집 기록(DB) 저장
@@ -51,10 +55,12 @@ jobs:
           MAIL_TO: ${{ secrets.MAIL_TO }}
           SEND_MAIL: ${{ github.event_name == 'schedule' || inputs.send_mail }}
           DAYS: ${{ inputs.days }}
+          RECHECK: ${{ inputs.recheck }}
         run: |
           args=""
           if [ "$SEND_MAIL" != "true" ]; then args="--no-mail"; fi
           if [ -n "$DAYS" ]; then args="$args --days $DAYS"; fi
+          if [ "$RECHECK" = "true" ]; then args="$args --recheck"; fi
           python -m ulsan_jobs camp --db data/postings.db $args
 
       # 메일을 보내지 못한 공고는 DB 에 '미발송'으로 남아 다음 실행 때 다시 보내진다
