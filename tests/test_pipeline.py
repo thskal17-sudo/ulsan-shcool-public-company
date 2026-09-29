@@ -324,3 +324,67 @@ def test_mail_separates_unreachable_sites_from_real_problems():
     assert "확인이 필요한 사이트 1곳" in html and "울산시설공단 - 강습위탁: 목록에서 글을 하나도 읽지 못함" in html
     assert "접속 안 된 사이트 2곳" in html and "나라일터 모집공고 · 중구청 채용공고(새올)" in html
     assert "기관명에" not in html and "울산도서관" not in html
+
+
+def run_scheduled(tmp_path, config, now, send_mail=True):
+    return pipeline.run(
+        db_path=tmp_path / "db.sqlite", out_dir=tmp_path / "out", send_mail=send_mail, config_dir=config,
+        now=now, once_daily=True,
+    )
+
+
+class MorePostsCollector(Collector):
+    def collect(self):
+        extra = Posting("fake", "늘봄 코딩 강사 모집", "https://example.org/5", "5", "성안초등학교",
+                        deadline=date(2026, 10, 5))
+        return [Posting(**{**p.__dict__}) for p in POSTS] + [extra]
+
+
+def test_backup_run_sends_nothing_when_nothing_new(env):
+    # 새벽 실행이 정기 메일을 보냈으면, 예비 실행은 새 공고가 없을 때 메일을 보내지 않는다
+    tmp_path, config, sent = env
+    first = run_scheduled(tmp_path, config, datetime(2026, 9, 26, 5, 10, tzinfo=KST))
+    assert first.mailed and not first.already_mailed and len(sent) == 1
+    assert "마감임박 1건" in sent[0]["Subject"]
+
+    backup = run_scheduled(tmp_path, config, datetime(2026, 9, 26, 8, 20, tzinfo=KST))
+    assert backup.already_mailed and backup.new == [] and not backup.mailed and len(sent) == 1
+
+
+def test_backup_run_mails_only_new_postings_as_supplement(env, monkeypatch):
+    tmp_path, config, sent = env
+    run_scheduled(tmp_path, config, datetime(2026, 9, 26, 5, 10, tzinfo=KST))
+    monkeypatch.setitem(COLLECTORS, "fake", MorePostsCollector)
+
+    backup = run_scheduled(tmp_path, config, datetime(2026, 9, 26, 8, 20, tzinfo=KST))
+    assert backup.mailed and [p.title for p in backup.new] == ["늘봄 코딩 강사 모집"] and len(sent) == 2
+    msg = sent[1]
+    assert "보충 신규 1건" in msg["Subject"] and "마감임박" not in msg["Subject"]
+    assert next(msg.iter_attachments()).get_filename() == "강사잇다_울산_2026-09-26_보충.xlsx"
+    html = msg.get_body(("html",)).get_content()
+    assert "예비 수집에서 새로 찾은 공고 <b>1</b>건" in html and "<h3>마감임박" not in html
+
+
+def test_backup_run_sends_the_daily_mail_when_the_first_run_did_not(env):
+    # 새벽 실행이 통째로 빠졌거나 메일을 못 보냈으면 예비 실행이 정기 메일을 보낸다
+    tmp_path, config, sent = env
+    run_scheduled(tmp_path, config, datetime(2026, 9, 26, 5, 10, tzinfo=KST), send_mail=False)
+    backup = run_scheduled(tmp_path, config, datetime(2026, 9, 26, 8, 20, tzinfo=KST))
+    assert backup.mailed and not backup.already_mailed and len(sent) == 1
+    assert "신규 2건 · 마감임박 1건" in sent[0]["Subject"]
+
+
+def test_daily_mail_is_sent_again_the_next_day(env):
+    tmp_path, config, sent = env
+    run_scheduled(tmp_path, config, datetime(2026, 9, 26, 5, 10, tzinfo=KST))
+    next_day = run_scheduled(tmp_path, config, datetime(2026, 9, 27, 5, 10, tzinfo=KST))
+    assert next_day.mailed and not next_day.already_mailed and len(sent) == 2
+    assert "보충" not in sent[1]["Subject"]
+
+
+def test_manual_run_always_sends_the_full_mail(env):
+    # 손으로 돌린 실행(once_daily 없음)은 오늘 이미 보냈어도 전체 메일을 보낸다
+    tmp_path, config, sent = env
+    run_scheduled(tmp_path, config, datetime(2026, 9, 26, 5, 10, tzinfo=KST))
+    run(tmp_path, config, send_mail=True, now=datetime(2026, 9, 26, 14, 0, tzinfo=KST))
+    assert len(sent) == 2 and "보충" not in sent[1]["Subject"]

@@ -40,6 +40,7 @@ class RunOutcome:
     mailed: bool = False
     source_names: dict[str, str] = field(default_factory=dict)
     upload_path: Path | None = None  # 메일에 붙이는 강사잇다 양식 (마감 전 공고 전부)
+    already_mailed: bool = False  # once_daily 실행에서 오늘 정기 메일을 이미 보낸 뒤였음
 
 
 def select_sources(sources: list[Source], only: list[str] | None, max_phase: int) -> list[Source]:
@@ -291,9 +292,12 @@ def run(
     now: datetime | None = None,
     http: Http | None = None,
     catch_up: bool = False,
+    once_daily: bool = False,
 ) -> RunOutcome:
     """catch_up: 앞선 실행에서 접속 안 된 소스(only)를 다른 서버에서 다시 수집하는 보충 실행.
-    새 공고가 있을 때만 '보충' 메일을 보낸다 (마감임박 목록은 앞선 메일에 이미 있음)."""
+    새 공고가 있을 때만 '보충' 메일을 보낸다 (마감임박 목록은 앞선 메일에 이미 있음).
+    once_daily: 예약 실행용. 오늘(KST) 정기 메일을 이미 보냈으면 보충 실행처럼 새 공고가 있을 때만
+    '보충' 메일을 보낸다 (새벽 실행과 예비 실행이 둘 다 돌아도 전체 메일은 하루 한 번)."""
     settings = load_settings(config_dir)
     rules = load_rules(config_dir)
     now = now or now_kst()
@@ -306,6 +310,8 @@ def run(
         results = collect_all(sources, rules, store, http or Http(), now)
         store.log_runs(results, now)
         store.commit()
+        already_mailed = once_daily and store.mailed_on(today)
+        supplement = catch_up or already_mailed
 
         pending = store.unreported()
         statuses = ("모집중", "결과공고") if rules.keep_result_notices else ("모집중",)
@@ -316,7 +322,7 @@ def run(
         closing_soon = [
             p for p in active if p.deadline is not None and 0 <= (p.deadline - today).days <= rules.closing_soon_days
         ]
-        suffix = "_보충" if catch_up else ""
+        suffix = "_보충" if supplement else ""
         # 수집현황까지 담은 보고서는 Actions 보관용, 메일에는 강사잇다 올리기 양식을 붙인다
         report_path = build_report(
             out_dir / f"울산_강사구인_{today.isoformat()}{suffix}.xlsx",
@@ -326,10 +332,11 @@ def run(
             out_dir / f"강사잇다_울산_{today.isoformat()}{suffix}.xlsx", active, source_names, _template(config_dir)
         )
         outcome = RunOutcome(
-            today, results, new, closing_soon, active, report_path, source_names=source_names, upload_path=upload_path
+            today, results, new, closing_soon, active, report_path, source_names=source_names, upload_path=upload_path,
+            already_mailed=already_mailed,
         )
 
-        if send_mail and (new or not catch_up):
+        if send_mail and (new or not supplement):
             held = sum(1 for p in active if p.deadline is None)
             note = f"첨부 파일은 강사잇다 올리기 양식입니다 (마감 전 공고 {len(active)}건" + (
                 f", 그중 마감일을 찾지 못한 {held}건은 '보류' 표시)." if held else ")."
@@ -337,10 +344,10 @@ def run(
             cfg = MailConfig.from_env()
             msg = build_message(
                 cfg,
-                subject_line(today, len(new), len(closing_soon), catch_up=catch_up),
+                subject_line(today, len(new), len(closing_soon), catch_up=supplement),
                 html_body(
-                    today, new, [] if catch_up else closing_soon, len(active), results,
-                    catch_up=catch_up, attachment_note=note,
+                    today, new, [] if supplement else closing_soon, len(active), results,
+                    catch_up=catch_up, backup=already_mailed and not catch_up, attachment_note=note,
                 ),
                 text_body(today, new, note),
                 upload_path,
@@ -348,6 +355,7 @@ def run(
             send(cfg, msg)
             # 오래돼서 신규에서 뺀 글도 함께 '보냄' 처리해서 다음 날 다시 거르지 않게 한다
             store.mark_reported([p.uid for p in pending], now_kst())
+            store.log_mail(now, "보충" if supplement else "정기", len(new))
             store.commit()
             outcome.mailed = True
         return outcome

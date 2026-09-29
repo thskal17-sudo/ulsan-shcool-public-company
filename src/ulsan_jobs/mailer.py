@@ -71,8 +71,10 @@ def html_body(
     limit: int = 30,
     *,
     catch_up: bool = False,
+    backup: bool = False,
     attachment_note: str = "전체 목록은 첨부 엑셀을 확인하세요.",
 ) -> str:
+    """catch_up: 접속 안 된 사이트만 다시 읽은 보충 메일. backup: 오늘 메일을 보낸 뒤 예비 실행에서 찾은 보충 메일."""
     problems = [r for r in results if r.is_problem]
     unreachable = [r for r in results if r.is_unreachable]
     parts = ["<div style=\"font-family:'Malgun Gothic',sans-serif;font-size:14px;color:#222\">"]
@@ -81,6 +83,12 @@ def html_body(
             f"<h2 style='margin:0 0 8px'>울산 강사 구인공고 {today.isoformat()} · 보충</h2>",
             f"<p>앞선 수집 때 접속되지 않은 사이트 {len(results)}곳을 다른 수집 서버에서 다시 읽어"
             f" 새로 찾은 공고 <b>{len(new)}</b>건입니다.</p>",
+            f"<p>{escape(attachment_note)}</p>",
+        ]
+    elif backup:
+        parts += [
+            f"<h2 style='margin:0 0 8px'>울산 강사 구인공고 {today.isoformat()} · 보충</h2>",
+            f"<p>오늘 메일을 보낸 뒤 예비 수집에서 새로 찾은 공고 <b>{len(new)}</b>건입니다.</p>",
             f"<p>{escape(attachment_note)}</p>",
         ]
     else:

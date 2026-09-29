@@ -1,7 +1,7 @@
 """명령줄 실행.
 
     python -m ulsan_jobs run [--no-mail] [--db data/postings.db] [--out out] [--source ID ...]
-                             [--retry-list FILE] [--catch-up]
+                             [--retry-list FILE] [--catch-up] [--once-daily]
     python -m ulsan_jobs check-source ID [ID ...]   # 소스만 시험 수집 (DB·메일 없음)
     python -m ulsan_jobs send-test-mail             # 메일 설정 확인
     python -m ulsan_jobs camp [--no-mail] [--days N] # 나라장터 캠프 수주 공고 (G2B_API_KEY 필요)
@@ -34,6 +34,7 @@ def cmd_run(args) -> int:
         only=args.source or None,
         max_phase=args.max_phase,
         catch_up=args.catch_up,
+        once_daily=args.once_daily,
     )
     if args.retry_list:
         retry = [r.source_id for r in outcome.results if r.needs_other_server]
@@ -53,6 +54,8 @@ def cmd_run(args) -> int:
         print("메일: 발송함")
     elif args.no_mail:
         print("메일: 발송 안 함 (--no-mail)")
+    elif outcome.already_mailed:
+        print("메일: 오늘 메일을 이미 보냈고 새 공고가 없어 보내지 않음 (예비 실행)")
     else:
         print("메일: 새 공고가 없어 보내지 않음 (보충 수집)")
     return 0
@@ -189,6 +192,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_run.add_argument(
         "--catch-up", action="store_true", help="보충 수집: --source 소스만 다시 수집하고 새 공고가 있을 때만 메일"
+    )
+    p_run.add_argument(
+        "--once-daily", action="store_true",
+        help="예약 실행용: 오늘(KST) 정기 메일을 이미 보냈으면 새 공고가 있을 때만 '보충' 메일",
     )
     p_run.set_defaults(func=cmd_run)
 
