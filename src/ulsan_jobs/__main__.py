@@ -5,6 +5,7 @@
     python -m ulsan_jobs check-source ID [ID ...]   # 소스만 시험 수집 (DB·메일 없음)
     python -m ulsan_jobs send-test-mail             # 메일 설정 확인
     python -m ulsan_jobs camp [--no-mail] [--days N] # 나라장터 캠프 수주 공고 (G2B_API_KEY 필요)
+    python -m ulsan_jobs briefing [--no-mail] [--force] # 오늘의 브리핑 (BRIEFING_TO 필요)
 """
 from __future__ import annotations
 
@@ -131,6 +132,29 @@ def cmd_camp(args) -> int:
     return 0
 
 
+def cmd_briefing(args) -> int:
+    from .briefing import run_briefing
+
+    out = run_briefing(
+        db_path=Path(args.db),
+        state_path=Path(args.state),
+        send_mail=not args.no_mail,
+        force=args.force,
+        config_dir=Path(args.config),
+        out_html=Path(args.html) if args.html else None,
+    )
+    b = out.briefing
+    print(f"\n=== 오늘의 브리핑 {b.today} ===")
+    for s in b.sections:
+        state = "도착" if s.ready else "미도착"
+        print(f"  {s.name:<10} {state} · 신규 {len(s.new)} · 마감임박 {len(s.closing)} · 실패 {len(s.problems)} {s.error}")
+    c = b.camp
+    print(f"  캠프 수주   {'도착' if c.ready else '미도착'} · 바로지원 {len(c.go)} · 검토 {len(c.review)} · 참고 {len(c.ref)}")
+    print(f"판단: {out.reason}")
+    print("메일: 발송함" if out.sent else "메일: 보내지 않음")
+    return 0
+
+
 def cmd_send_test_mail(args) -> int:
     from .mailer import MailConfig, build_message, send
 
@@ -178,6 +202,14 @@ def main(argv: list[str] | None = None) -> int:
     p_camp.add_argument("--days", type=int, default=None, help="최근 며칠치 공고를 볼지 (기본: config/camp.yaml)")
     p_camp.add_argument("--recheck", action="store_true", help="아직 안 알린 공고의 참가가능지역을 다시 조회")
     p_camp.set_defaults(func=cmd_camp)
+
+    p_brief = sub.add_parser("briefing", help="오늘의 브리핑 (지역별 강사 공고 + 캠프 수주를 한 통으로)")
+    p_brief.add_argument("--db", default="data/postings.db")
+    p_brief.add_argument("--state", default="data/briefing_last_sent.txt", help="마지막으로 보낸 날짜를 적는 파일")
+    p_brief.add_argument("--no-mail", action="store_true")
+    p_brief.add_argument("--force", action="store_true", help="오늘 이미 보냈거나 자료가 덜 와도 보냄")
+    p_brief.add_argument("--html", default=None, help="메일 본문을 이 파일로도 저장")
+    p_brief.set_defaults(func=cmd_briefing)
 
     p_mail = sub.add_parser("send-test-mail", help="메일 설정 확인")
     p_mail.set_defaults(func=cmd_send_test_mail)
