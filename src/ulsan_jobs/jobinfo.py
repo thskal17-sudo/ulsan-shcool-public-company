@@ -6,7 +6,7 @@
        - 관련 자격증 소지자
     모집분야 / 모집인원 / 위촉기간             표 머리 칸이 연달아 나온 뒤
     수영(초급반) / 2명 / 2026. 10. 1. ~        같은 순서로 값 칸
-라벨은 줄 앞(번호·기호 뒤)에 있을 때만 인정하고, 칸마다 값 모양을 확인한다 (일정은 숫자가 있어야 하는 등).
+라벨은 줄 앞(번호·기호 뒤)에 있을 때만 인정하고, 칸마다 값 모양을 확인한다 (일정은 날짜가 있어야 하는 등).
 찾지 못한 칸은 비워 두고, 강사잇다 양식을 만들 때 안내 문구로 채운다.
 """
 from __future__ import annotations
@@ -15,7 +15,7 @@ import re
 
 
 # 찾는 방법을 고치면 올린다. 저장된 정보의 버전이 다르면 다음 실행 때 공고문을 다시 읽는다
-INFO_VERSION = 2
+INFO_VERSION = 3
 
 
 def _words(*words: str) -> str:
@@ -32,7 +32,7 @@ LABELS = {
     "hours": _words("수업시간", "운영시간", "교육시간", "강의시간", "근무시간", "수업요일"),
     "target": _words("교육대상", "수업대상", "수강대상", "운영대상", "참여대상", "대상학년", "대상학생"),
     "headcount": _words("모집인원", "선발인원", "채용인원", "위촉인원", "모집예정인원"),
-    "qualification": _words("지원자격", "응시자격", "자격요건", "신청자격", "응모자격", "자격기준"),
+    "qualification": _words("지원자격", "응시자격", "자격요건", "신청자격", "응모자격", "자격기준", "지원조건"),
     "documents": _words("제출서류", "구비서류", "접수서류", "응시서류", "신청서류"),
     # 모집 분야는 값이 '강사'·'운영 조건'처럼 엉뚱한 경우가 많아 쓰지 않고, 표 머리 칸을 맞추는 데만 쓴다
     "field": _words("모집분야", "모집과목", "모집종목", "모집강좌", "강좌명", "프로그램명", "강의과목", "채용분야"),
@@ -52,6 +52,8 @@ _HEADING_TAIL = re.compile(r"^(?:및|과|와|등|의|에\s)")  # '1. 모집분�
 _MULTI = {"qualification", "documents"}
 
 _DATED = re.compile(r"(?:19|20)\d{2}\s*[.년]\s*\d{1,2}\s*[.월]\s*\d{1,2}")
+# 일정 값이 날짜 모양인지: '10. 14'·'10월 14일'·'2026년 10월'·'10월~12월' (숫자 하나뿐인 '1' 은 아님)
+_DATE_LIKE = re.compile(r"\d{1,2}\s*[./월]\s*\d{1,2}|(?:19|20)\d{2}\s*[.년]\s*\d{1,2}|\d{1,2}\s*월")
 _SECTION = re.compile(r"^\d{1,2}\.\s*\S")  # '2. 지원 자격' 같은 큰 번호 줄
 
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
@@ -99,8 +101,13 @@ def _schedule_below(lines: list[str], start: int, window: int = 12) -> str | Non
     return None
 
 
+def _usable(key: str, value: str) -> bool:
+    """일정 칸은 날짜 모양일 때만 받는다. 표 칸이 어긋나 인원 '1' 같은 값이 오면 버리고 뒤에서 다시 찾는다."""
+    return key != "schedule" or bool(_DATE_LIKE.search(value))
+
+
 def _raw_fields(lines: list[str]) -> dict[str, str]:
-    """항목 이름 → 값 글자 (칸마다 처음 찾은 것)."""
+    """항목 이름 → 값 글자 (칸마다 처음 찾은 쓸 만한 것)."""
     out: dict[str, str] = {}
     i = 0
     while i < len(lines):
@@ -126,7 +133,8 @@ def _raw_fields(lines: list[str]) -> dict[str, str]:
                 values = lines[j: j + len(run)]
                 if len(values) == len(run) and not any(_label_of(v) for v in values):
                     for k, v in zip(run, values):
-                        out.setdefault(k, v)
+                        if _usable(k, v):
+                            out.setdefault(k, v)
                     i = j + len(run)
                     continue
                 i = j
@@ -142,7 +150,7 @@ def _raw_fields(lines: list[str]) -> dict[str, str]:
             else:
                 break
             j += 1
-        if items and key != "other":
+        if items and key != "other" and _usable(key, items[0]):
             out.setdefault(key, "\n".join(items) if key in _MULTI else items[0])
         i = j if items else i + 1
     return out
@@ -155,7 +163,7 @@ def _cap(text: str, limit: int) -> str:
 def _clean(raw: dict[str, str]) -> dict:
     info: dict = {}
     schedule = raw.get("schedule", "")
-    if re.search(r"\d", schedule):
+    if schedule:
         hours = raw.get("hours", "")
         if hours and re.search(r"\d|[월화수목금토일]요일|매주", hours) and hours not in schedule:
             schedule = f"{schedule} / {hours}"
