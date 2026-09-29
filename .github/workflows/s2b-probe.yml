@@ -1,0 +1,32 @@
+name: S2B 진단 (임시)
+
+on:
+  push:
+    branches: [claude/s2b-probe]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - run: python scripts/s2b_probe.py scripts/s2b_probe_urls.txt
+      - name: 결과를 probe-out 브랜치에 저장
+        run: |
+          cd out/probe
+          git init -q -b probe-out
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "S2B probe $(date -u +%FT%TZ)"
+          git push -q -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" probe-out
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
