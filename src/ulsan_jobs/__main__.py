@@ -4,6 +4,7 @@
                              [--retry-list FILE] [--catch-up]
     python -m ulsan_jobs check-source ID [ID ...]   # 소스만 시험 수집 (DB·메일 없음)
     python -m ulsan_jobs send-test-mail             # 메일 설정 확인
+    python -m ulsan_jobs camp [--no-mail] [--days N] # 나라장터 캠프 수주 공고 (G2B_API_KEY 필요)
 """
 from __future__ import annotations
 
@@ -94,6 +95,41 @@ def cmd_check_source(args) -> int:
     return status_code
 
 
+def cmd_camp(args) -> int:
+    from .camp import G2BError, run_camp
+
+    try:
+        out = run_camp(
+            db_path=Path(args.db),
+            send_mail=not args.no_mail,
+            config_dir=Path(args.config),
+            lookback_days=args.days,
+        )
+    except G2BError as exc:
+        print(f"캠프 수주 공고: {exc}")
+        return 1
+    print(f"\n=== 캠프 수주 공고 {out.now:%Y-%m-%d %H:%M} ===")
+    print(f"용역 공고 {out.scanned}건 · 키워드 일치 {out.matched}건 · 새 공고 {len(out.new)}건 · API 호출 {out.calls}회")
+    if out.methods:
+        print("키워드 공고의 계약방법: " + ", ".join(f"{k} {v}" for k, v in sorted(out.methods.items())))
+    for b in out.new:
+        close = f"{b.close_at:%m/%d %H:%M}" if b.close_at else "원문확인"
+        price = f"{b.price:,}원({b.price_label})" if b.price else "-"
+        print(f"  [{b.tier}] ~{close} | {b.demand_org or b.org} | {b.title}")
+        print(f"          {b.method or '-'} | {price} | 참가지역 {b.region_text} | {b.url}")
+    if out.closing_soon:
+        print(f"마감임박 {len(out.closing_soon)}건")
+    if out.region_errors:
+        print(f"참가가능지역 조회 실패 {out.region_errors}건 ('검토'로 분류)")
+    if out.mailed:
+        print("메일: 발송함")
+    elif args.no_mail:
+        print("메일: 발송 안 함 (--no-mail)")
+    else:
+        print("메일: 새 공고가 없어 보내지 않음")
+    return 0
+
+
 def cmd_send_test_mail(args) -> int:
     from .mailer import MailConfig, build_message, send
 
@@ -134,6 +170,12 @@ def main(argv: list[str] | None = None) -> int:
     p_check = sub.add_parser("check-source", help="소스 시험 수집")
     p_check.add_argument("ids", nargs="+")
     p_check.set_defaults(func=cmd_check_source)
+
+    p_camp = sub.add_parser("camp", help="나라장터 캠프 수주 공고 수집 → 메일")
+    p_camp.add_argument("--db", default="data/postings.db")
+    p_camp.add_argument("--no-mail", action="store_true", help="메일을 보내지 않음 (새 공고 표시도 유지)")
+    p_camp.add_argument("--days", type=int, default=None, help="최근 며칠치 공고를 볼지 (기본: config/camp.yaml)")
+    p_camp.set_defaults(func=cmd_camp)
 
     p_mail = sub.add_parser("send-test-mail", help="메일 설정 확인")
     p_mail.set_defaults(func=cmd_send_test_mail)
