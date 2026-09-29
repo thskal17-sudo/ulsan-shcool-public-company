@@ -5,7 +5,7 @@ name: 오늘의 브리핑
 on:
   # 이 저장소의 수집이 끝날 때마다 확인: 모든 곳의 오늘 자료가 모였으면 바로 보낸다
   workflow_run:
-    workflows: ["매일 강사 공고 수집·메일 발송", "캠프 수주 공고 (나라장터)"]
+    workflows: ["매일 강사 공고 수집·메일 발송", "캠프·교육 수주 공고 (나라장터·S2B)"]
     types: [completed]
   # 경남·평생교육원 보고서가 나중에 도착하는 날을 위한 예비 확인 (GitHub 예약은 몇 시간씩 밀릴 수 있음).
   # 09:00 KST 가 지나면 도착한 것만으로 보낸다 (config/briefing.yaml 의 send_anyway_after)
