@@ -41,6 +41,12 @@ CREATE TABLE IF NOT EXISTS source_runs (
     new       INTEGER NOT NULL,
     error     TEXT
 );
+-- 보낸 메일 (kind: 정기 = 그날의 전체 메일, 보충 = 새 공고만 더 알린 메일)
+CREATE TABLE IF NOT EXISTS mail_log (
+    sent_at   TEXT NOT NULL,
+    kind      TEXT NOT NULL,
+    new       INTEGER NOT NULL
+);
 """
 
 
@@ -155,6 +161,16 @@ class Store:
             "INSERT INTO source_runs VALUES (?, ?, ?, ?, ?, ?, ?)",
             [(ts, r.source_id, r.state, r.fetched, r.matched, r.new, r.error) for r in results],
         )
+
+    def log_mail(self, now: datetime, kind: str, new: int) -> None:
+        self.conn.execute("INSERT INTO mail_log VALUES (?, ?, ?)", (now.isoformat(timespec="seconds"), kind, new))
+
+    def mailed_on(self, day: date) -> bool:
+        """그날(KST) 정기 메일을 이미 보냈는가."""
+        row = self.conn.execute(
+            "SELECT 1 FROM mail_log WHERE kind = '정기' AND substr(sent_at, 1, 10) = ? LIMIT 1", (day.isoformat(),)
+        ).fetchone()
+        return row is not None
 
     def commit(self) -> None:
         self.conn.commit()
