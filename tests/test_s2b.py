@@ -69,6 +69,21 @@ def test_s2b_noise_is_excluded(cfg):
         assert topic_of(title, cfg) is None, title
 
 
+def test_education_research_production_trips_are_not_education(cfg):
+    # 9/29 첫 실행에서 '[교육]'으로 잡힌 교육 운영이 아닌 용역
+    for title in [
+        "서울하수도과학관 교육 홍보영상 제작 용역",
+        "APEC 디지털 교육정책 연수사업(ADEPT) 성과평가 및 중장기 성과관리체계 고도화 연구",
+        "경상국립대학교병원 임상교육훈련센터 건립공사 건축설계 제안공모",
+        "026학년도 국립전통예술고등학교 1학년 일본 소규모테마형교육여행 위탁 용역",
+        "2027/28년 (주)강원랜드 외국어 교육 위탁운영 용역",
+        "(비즈쿨)2026학년도 비즈쿨 페스티벌 부스 천막 대여",
+    ]:
+        assert topic_of(title, cfg) is None, title
+    assert topic_of("2026년 제2차 신규 채용자 교육 위탁 용역", cfg) == TOPIC_EDU
+    assert topic_of("2026년 부산청년 경제적 자립 성공을 위한 금융교육 운영 용역", cfg) == TOPIC_EDU
+
+
 # ---------------------------------------------------------------- 화면 읽기
 
 

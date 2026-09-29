@@ -108,6 +108,7 @@ class CampConfig:
     include_with: dict[str, list[str]] = field(default_factory=dict)
     edu_words: list[str] = field(default_factory=list)
     edu_ignore: list[str] = field(default_factory=list)
+    edu_exclude: list[str] = field(default_factory=list)
     s2b: dict = field(default_factory=dict)
 
 
@@ -124,6 +125,7 @@ def load_camp_config(config_dir: Path = DEFAULT_CONFIG_DIR) -> CampConfig:
         include_with={str(k): [str(w) for w in (v or [])] for k, v in (data.get("include_with") or {}).items()},
         edu_words=[str(w) for w in (data.get("education") or {}).get("words", [])],
         edu_ignore=[str(w) for w in (data.get("education") or {}).get("ignore", [])],
+        edu_exclude=[str(w) for w in (data.get("education") or {}).get("exclude", [])],
         s2b=dict(data.get("s2b") or {}),
     )
 
@@ -179,7 +181,7 @@ def topic_of(title: str, cfg: CampConfig) -> str | None:
         rest = t
         for w in sorted((_squash(w) for w in cfg.edu_ignore), key=len, reverse=True):
             rest = rest.replace(w, "/")
-        if any(_squash(w) in rest for w in cfg.edu_words):
+        if any(_squash(w) in rest for w in cfg.edu_words) and not any(_squash(w) in t for w in cfg.edu_exclude):
             return TOPIC_EDU
     return None
 
