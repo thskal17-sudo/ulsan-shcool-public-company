@@ -18,7 +18,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install requests
-      - run: python scripts/s2b_probe.py scripts/s2b_probe_urls.txt
+      - run: python scripts/s2b_probe2.py
       - name: 결과를 probe-out 브랜치에 저장
         run: |
           cd out/probe
