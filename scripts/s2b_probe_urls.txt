@@ -1,8 +1,7 @@
-https://www.s2b.kr/S2BNCustomer/S2B/scrweb/ssmu/tcmp/openApiInterface.jsp?ES=BS&EM=4
-https://www.s2b.kr/S2BNCustomer/S2B/scrweb/ssmu/tcmp/openApiInterface.jsp?ES=BS&EM=1
-https://www.s2b.kr/S2BNCustomer/S2B/scrweb/ssmu/tcmp/openApiInterface.jsp?ES=BS&EM=2
-https://www.s2b.kr/S2BNCustomer/S2B/scrweb/ssmu/tcmp/openApiInterface.jsp?ES=BS&EM=3
-https://www.s2b.kr/S2BNCustomer/tcmp100.do?forwardName=openApi&ES=BS
-https://www.pen.go.kr/main/cm/cntnts/cntntsView.do?mi=31725&cntntsId=543
-https://www.pen.go.kr/main/cm/cntnts/cntntsView.do?mi=31724&cntntsId=542
-https://www.s2b.kr/S2BNCustomer/S2B/
+https://www.s2b.kr/S2BNCustomer/tcmo001.do?forwardName=openApiTcmo1&areaKind=%BA%CE%BB%EA&search_yn=Y
+https://www.s2b.kr/S2BNCustomer/stmo001.do?forwardName=openApiStmo1&city=%BA%CE%BB%EA
+https://www.s2b.kr/S2BNCustomer/tcmo001.do?forwardName=openApiTcmo1&areaKind=%BF%EF%BB%EA&search_yn=Y
+https://www.s2b.kr/S2BNCustomer/stmo001.do?forwardName=openApiStmo1&city=%BF%EF%BB%EA
+https://www.s2b.kr/S2BNCustomer/tcmo001.do?forwardName=openApiTcmo1&areaKind=%B0%E6%B3%B2&search_yn=Y
+https://www.s2b.kr/S2BNCustomer/stmo001.do?forwardName=openApiStmo1&city=%B0%E6%B3%B2
+https://www.s2b.kr/S2BNCustomer/tcmo001.do?forwardName=openApiTcmo1&areaKind=%EB%B6%80%EC%82%B0&search_yn=Y

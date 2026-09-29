@@ -71,7 +71,7 @@ def fetch(url: str, depth: int, referer: str | None = None) -> None:
 def main() -> None:
     urls = [line.strip() for line in Path(sys.argv[1]).read_text().splitlines() if line.strip() and not line.startswith("#")]
     for u in urls:
-        fetch(u, 2)
+        fetch(u, 0)
     (OUT / "index.txt").write_text("\n".join(index) + "\n", encoding="utf-8")
     print("\n".join(index))
 
