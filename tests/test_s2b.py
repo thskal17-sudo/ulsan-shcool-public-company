@@ -78,6 +78,7 @@ def test_education_research_production_trips_are_not_education(cfg):
         "026학년도 국립전통예술고등학교 1학년 일본 소규모테마형교육여행 위탁 용역",
         "2027/28년 (주)강원랜드 외국어 교육 위탁운영 용역",
         "(비즈쿨)2026학년도 비즈쿨 페스티벌 부스 천막 대여",
+        "2026 창업문화확산 사업화 멘토링 우수사례집 발간 및 성과공유 콘텐츠 기획 제작 용역",
     ]:
         assert topic_of(title, cfg) is None, title
     assert topic_of("2026년 제2차 신규 채용자 교육 위탁 용역", cfg) == TOPIC_EDU
