@@ -8,6 +8,7 @@ from openpyxl import load_workbook
 from ulsan_jobs import pipeline
 from ulsan_jobs.collectors import COLLECTORS, Collector
 from ulsan_jobs.models import KST, Posting
+from ulsan_jobs.storage import Store
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -388,3 +389,26 @@ def test_manual_run_always_sends_the_full_mail(env):
     run_scheduled(tmp_path, config, datetime(2026, 9, 26, 5, 10, tzinfo=KST))
     run(tmp_path, config, send_mail=True, now=datetime(2026, 9, 26, 14, 0, tzinfo=KST))
     assert len(sent) == 2 and "보충" not in sent[1]["Subject"]
+
+
+DECIDED = Posting(
+    "fake", "[남부청소년수련관] 주말 수영 강사(긴급) 위·수탁 대상 결정 공고", "https://example.org/9", "9", "울주군시설관리공단"
+)
+
+
+class DecidedCollector(Collector):
+    def collect(self):
+        return [Posting(**{**p.__dict__}) for p in POSTS] + [Posting(**{**DECIDED.__dict__})]
+
+
+def test_posting_stored_before_a_new_result_word_is_closed(env, monkeypatch):
+    # '대상 결정 공고'를 결과공고로 보기 전에 모집공고로 저장된 글은 다음 수집 때 닫혀 진행중에서 빠진다
+    tmp_path, config, sent = env
+    store = Store(tmp_path / "db.sqlite")
+    store.upsert(Posting(**{**DECIDED.__dict__}), NOW)
+    store.close()
+    monkeypatch.setitem(COLLECTORS, "fake", DecidedCollector)
+
+    outcome = run(tmp_path, config, send_mail=False)
+    assert DECIDED.title not in [p.title for p in outcome.active + outcome.new]
+    assert [p.title for p in outcome.new] == ["수영 강사 모집", "방과후 독서논술 강사 모집"]
