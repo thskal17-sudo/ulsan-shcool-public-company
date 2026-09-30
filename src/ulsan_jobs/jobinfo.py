@@ -15,7 +15,7 @@ import re
 
 
 # 찾는 방법을 고치면 올린다. 저장된 정보의 버전이 다르면 다음 실행 때 공고문을 다시 읽는다
-INFO_VERSION = 3
+INFO_VERSION = 4
 
 
 def _words(*words: str) -> str:
@@ -55,6 +55,9 @@ _DATED = re.compile(r"(?:19|20)\d{2}\s*[.년]\s*\d{1,2}\s*[.월]\s*\d{1,2}")
 # 일정 값이 날짜 모양인지: '10. 14'·'10월 14일'·'2026년 10월'·'10월~12월' (숫자 하나뿐인 '1' 은 아님)
 _DATE_LIKE = re.compile(r"\d{1,2}\s*[./월]\s*\d{1,2}|(?:19|20)\d{2}\s*[.년]\s*\d{1,2}|\d{1,2}\s*월")
 _SECTION = re.compile(r"^\d{1,2}\.\s*\S")  # '2. 지원 자격' 같은 큰 번호 줄
+_RECRUIT_SECTION = re.compile(r"^\d{1,2}\.\s*.*(?:모집|채용)")  # '1. 모집내용', '1. 채용 과목 및 기간'
+_BARE_PERIOD = re.compile(r"^기\s*간$")  # 모집 표의 칸 이름이 '기간'뿐인 경우
+_HEAD_CELL_MAX = 10  # 라벨 아래 표 머리 칸('구분', '내용', '1차 전형')으로 보는 짧은 줄 길이
 
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 _APPLY_WORDS = re.compile(r"접수|제출|지원|응모|신청")
@@ -106,11 +109,42 @@ def _usable(key: str, value: str) -> bool:
     return key != "schedule" or bool(_DATE_LIKE.search(value))
 
 
+def _items_below(lines: list[str], start: int, key: str, window: int = 8) -> list[str] | None:
+    """라벨 아래 표 머리 칸('구분', '내용', '1차 전형', 같은 라벨)을 건너뛰고 나오는 항목 줄들 (4개까지).
+
+        □ 제출 서류 / 구분 / 내용 / 1차 전형 / 제출 서류 / (지원자 공통) / ① 강사 지원 신청서 1부 / ② …
+    """
+    for j in range(start, min(start + window, len(lines))):
+        line = lines[j]
+        if _ITEM.match(line) and _label_of(line) is None:
+            items: list[str] = []
+            while j < len(lines) and len(items) < 4 and _ITEM.match(lines[j]) and _label_of(lines[j]) is None:
+                items.append(_ITEM.sub("", lines[j]))
+                j += 1
+            return items
+        found = _label_of(line)
+        if _SECTION.match(line) or (found and (found[0] != key or found[1])) or (
+            not found and len(line) > _HEAD_CELL_MAX
+        ):
+            return None
+    return None
+
+
 def _raw_fields(lines: list[str]) -> dict[str, str]:
     """항목 이름 → 값 글자 (칸마다 처음 찾은 쓸 만한 것)."""
     out: dict[str, str] = {}
+    in_recruit = False
     i = 0
     while i < len(lines):
+        if _SECTION.match(lines[i]):
+            in_recruit = bool(_RECRUIT_SECTION.match(lines[i]))
+        if in_recruit and "schedule" not in out and _BARE_PERIOD.match(lines[i]):
+            # 무룡고 공고문: 과목 / 채용 / 인원(명) / 기간 / 비고 / 일반사회 / … / 2026. 10. 22. ~ 10. 30.
+            below = _schedule_below(lines, i + 1)
+            if below:
+                out["schedule"] = below
+            i += 1
+            continue
         found = _label_of(lines[i])
         if found is None:
             i += 1
@@ -139,6 +173,14 @@ def _raw_fields(lines: list[str]) -> dict[str, str]:
                     continue
                 i = j
                 continue
+        if key in _MULTI and not value and key not in out and i + 1 < len(lines):
+            nxt = lines[i + 1]
+            if not _ITEM.match(nxt) and _label_of(nxt) is None and len(nxt) <= _HEAD_CELL_MAX:
+                below = _items_below(lines, i + 1, key)
+                if below:
+                    out[key] = "\n".join(below)
+                    i += 1
+                    continue
         items: list[str] = [value] if value else []
         j = i + 1
         while j < len(lines) and _label_of(lines[j]) is None:

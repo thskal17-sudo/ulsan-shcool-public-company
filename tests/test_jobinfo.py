@@ -119,3 +119,36 @@ def test_schedule_needs_a_date():
     assert "schedule" not in extract_info("운영기간: 1")
     assert "schedule" not in extract_info("교육기간: 19:20~21:00")
     assert extract_info("운영기간: 10월 ~ 12월")["schedule"] == "10월 ~ 12월"
+
+
+def test_documents_under_a_table_header():
+    # 미래교육관 공고문: 제출 서류 라벨 아래 '구분 / 내용' 머리 칸이 먼저 나와 '구분'을 값으로 읽었다
+    text = "\n".join([
+        "□ 제출 서류", "구분", "내용", "1차 전형", "제출 서류", "(지원자 공통)",
+        "① 강사 지원 신청서 1부(서식1)", "② 자기소개서 1부(서식2)", "③ 개인정보 수집·이용 동의서 1부(서식3)",
+        "④ 프로그램 계획서 1부(서식4) ※ESD만듦 분야 한함", "⑤ 해당 분야 자격증 사본 1부 (해당자에 한함)",
+        "2차 전형", "제출 서류", "(1차 합격자)", "① 성범죄경력 조회 동의서 1부(서식5)",
+    ])
+    assert extract_info(text)["documents"] == (
+        "강사 지원 신청서 1부(서식1)\n자기소개서 1부(서식2)\n개인정보 수집·이용 동의서 1부(서식3)\n"
+        "프로그램 계획서 1부(서식4) ※ESD만듦 분야 한함"
+    )
+
+
+def test_bare_period_column_in_the_recruitment_table():
+    # 무룡고 공고문: 모집 표의 칸 이름이 '기간'뿐이다 (채용 / 인원(명) 은 두 줄로 나뉜 한 칸)
+    text = "\n".join([
+        "시간 강사 채용 공고", "1. 모집내용", "과목", "채용", "인원(명)", "기간", "비고",
+        "일반사회", "(사회교과군 가능)", "1", "2026. 10. 22. ~ 10. 30.", "7일간 23시수", "시간당 30,000원",
+        "2. 응시자격", "가. 중등교원자격증 소지자 중 만62세 미만",
+    ])
+    assert extract_info(text)["schedule"] == "2026. 10. 22. ~ 10. 30."
+
+
+def test_bare_period_outside_the_recruitment_table_is_ignored():
+    # 응시원서 서식의 경력 칸 '기간' 은 수업 일정이 아니다 (공고일 날짜를 가져오지 않는다)
+    text = "\n".join([
+        "1. 모집내용", "과목", "인원", "국어", "1", "2. 응시자격", "가. 교원자격증 소지자",
+        "3. 응시원서", "경력", "기간", "직위", "2026. 9. 29.",
+    ])
+    assert "schedule" not in extract_info(text)

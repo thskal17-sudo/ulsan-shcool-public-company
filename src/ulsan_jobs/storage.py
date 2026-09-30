@@ -118,6 +118,14 @@ class Store:
         """결과공고가 올라와 모집이 끝난 공고로 표시 (신규·진행중에서 빠진다)."""
         self.conn.execute("UPDATE postings SET status = ? WHERE uid = ?", (CLOSED, uid))
 
+    def close_if_open(self, uid: str) -> str | None:
+        """전에 모집공고로 저장했지만 지금 규칙으로는 결과공고인 글을 닫는다. 닫았으면 그 제목."""
+        row = self.conn.execute("SELECT title FROM postings WHERE uid = ? AND status = '모집중'", (uid,)).fetchone()
+        if row is None:
+            return None
+        self.mark_closed(uid)
+        return row[0]
+
     def detail_state(self, uid: str) -> tuple[date | None, dict | None, str]:
         """저장된 마감일·공고문 정보·상태 (정보가 None 이면 아직 공고문을 안 봄)."""
         row = self.conn.execute("SELECT deadline, info, status FROM postings WHERE uid = ?", (uid,)).fetchone()

@@ -169,6 +169,10 @@ def _collect_source(
         if status == "결과공고":
             result_notices.append(p)
             if not rules.keep_result_notices:
+                # 결과공고 낱말이 늘기 전에 모집공고로 저장된 글이면 이제 닫는다 ('… 대상 결정 공고', 2026-09-30)
+                reclassified = store.close_if_open(p.uid)
+                if reclassified:
+                    log.info("결과공고로 다시 분류: %s", reclassified)
                 continue
         p.status = status
         p.category = categorize(f"{p.title} {p.label}", p.org_name, rules)
