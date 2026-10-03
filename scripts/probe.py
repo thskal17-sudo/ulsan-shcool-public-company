@@ -329,12 +329,8 @@ def page_info_report(url: str) -> None:
     except Exception as exc:  # noqa: BLE001
         print(f"PAGEINFO {clip(url, 140)}\n  ERROR {type(exc).__name__}: {clip(str(exc), 200)}")
         return
-    new = extract_info(None, block_text(soup))
-    old = extract_info(None, soup.get_text("\n"))  # 임시: 태그마다 줄을 나누던 방식과 비교
-    print(f"PAGEINFO {'같음' if new == old else '다름'} {clip(url, 140)}")
-    print(f"  info={new}")
-    if new != old:
-        print(f"  old ={old}")
+    print(f"PAGEINFO {clip(url, 140)}")
+    print(f"  info={extract_info(None, block_text(soup))}")
 
 
 def main() -> int:
