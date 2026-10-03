@@ -81,10 +81,14 @@ def test_block_text_joins_inline_spans():
 def test_block_text_splits_blocks_cells_and_breaks():
     html = """<div><table><tr><th>모집분야</th><td>수영<br>(초급반)</td></tr></table>
       <div><p>접수기간</p>2026. 10. 6.
-      ~ 10. 12.<!-- 주석 --></div><ul><li><b>문의</b> : 052-000-0000</li></ul></div>"""
+      ~ 10. 12.<!-- 주석 --></div><ul><li><b>문의</b> : 052-000-0000</li></ul>
+      <p><span>2026년 3학기</span>
+<span>단기특강</span></p></div>"""
     lines = [" ".join(ln.split()) for ln in block_text(page_soup(html.encode())).splitlines() if ln.strip()]
     # 표 칸·<br>·문단은 줄을 나누고, 소스의 줄바꿈은 빈칸, 주석은 뺀다
-    assert lines == ["모집분야", "수영", "(초급반)", "접수기간", "2026. 10. 6. ~ 10. 12.", "문의 : 052-000-0000"]
+    assert lines == [
+        "모집분야", "수영", "(초급반)", "접수기간", "2026. 10. 6. ~ 10. 12.", "문의 : 052-000-0000", "2026년 3학기 단기특강",
+    ]
 
 
 PAGES = {

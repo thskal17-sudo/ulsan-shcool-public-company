@@ -68,7 +68,7 @@ def block_text(soup: BeautifulSoup) -> str:
             stack.append(iter(child.children))
             closes.append(block)
         elif type(child) in (NavigableString, CData):  # get_text 처럼 주석·doctype 은 뺀다
-            out.append(" ".join(str(child).splitlines()))  # HTML 소스의 줄바꿈은 화면에서 빈칸
+            out.append(re.sub(r"\s+", " ", str(child)))  # HTML 소스의 줄바꿈은 화면에서 빈칸
     return "".join(out)
 
 
