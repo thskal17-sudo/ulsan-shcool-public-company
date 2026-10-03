@@ -2,8 +2,8 @@ from datetime import date, datetime
 
 from ulsan_jobs.collectors import Collector
 from ulsan_jobs.config import Source
-from ulsan_jobs.detail import extends, full_title, looks_truncated, page_soup
-from ulsan_jobs.jobinfo import INFO_VERSION
+from ulsan_jobs.detail import block_text, extends, full_title, looks_truncated, page_soup
+from ulsan_jobs.jobinfo import INFO_VERSION, extract_info
 from ulsan_jobs.models import KST, Posting
 from ulsan_jobs.pipeline import collect_all
 from ulsan_jobs.storage import Store
@@ -49,6 +49,46 @@ def test_truncation_helpers():
     assert not looks_truncated("수영 강사 모집 공고")
     assert extends("면접심사 시행 공고", "면접심사 시행 공...")
     assert not extends("다른 공고", "면접심사 시행 공...")
+
+
+
+def _spans(*parts: str) -> str:
+    return "<p>" + "".join(f'<span style="font-family:굴림체">{t}</span>' for t in parts) + "</p>"
+
+
+def test_block_text_joins_inline_spans():
+    # 천상고 공고: 글자 조각마다 <span> 이 씌워져 있다. 태그마다 줄을 나누면 '가' 만 한 줄이 돼서
+    # 지원 자격·제출 서류가 '가' 로 들어갔다
+    html = (
+        '<div class="view">'
+        + _spans("2. ", "응시자격 ")
+        + _spans(" ", "가", ". ", "해당과목 교원자격증 소지자")
+        + _spans(" ", "나", ". ", "국가공무원법 제", "33", "조 및 기타 관계법령에 의하여 임용에 결격사유가 없는 자")
+        + _spans("3. ", "제출서류")
+        + _spans(" ", "가", ". ", "응시원서")
+        + _spans(" ", "나", ". ", "교원자격증 사본 ", "1", "부")
+        + _spans("4. ", "제출")
+        + "</div>"
+    )
+    soup = page_soup(html.encode())
+    assert extract_info(None, soup.get_text("\n")) == {"qualification": "가", "documents": "가"}  # 예전 방식
+    assert extract_info(None, block_text(soup)) == {
+        "qualification": "해당과목 교원자격증 소지자\n국가공무원법 제33조 및 기타 관계법령에 의하여 임용에 결격사유가 없는 자",
+        "documents": "응시원서\n교원자격증 사본 1부",
+    }
+
+
+def test_block_text_splits_blocks_cells_and_breaks():
+    html = """<div><table><tr><th>모집분야</th><td>수영<br>(초급반)</td></tr></table>
+      <div><p>접수기간</p>2026. 10. 6.
+      ~ 10. 12.<!-- 주석 --></div><ul><li><b>문의</b> : 052-000-0000</li></ul>
+      <p><span>2026년 3학기</span>
+<span>단기특강</span></p></div>"""
+    lines = [" ".join(ln.split()) for ln in block_text(page_soup(html.encode())).splitlines() if ln.strip()]
+    # 표 칸·<br>·문단은 줄을 나누고, 소스의 줄바꿈은 빈칸, 주석은 뺀다
+    assert lines == [
+        "모집분야", "수영", "(초급반)", "접수기간", "2026. 10. 6. ~ 10. 12.", "문의 : 052-000-0000", "2026년 3학기 단기특강",
+    ]
 
 
 PAGES = {

@@ -318,6 +318,21 @@ def attach_report(url: str, template: str | None, around: list[str] | None = Non
                         print(f"    {j:4d} | {clip(lines[j], 160)}")
 
 
+
+def page_info_report(url: str) -> None:
+    """첨부 없이 상세 페이지 본문 글자만으로 찾은 강사잇다 칸 (파이프라인이 첨부에서 못 찾은 칸을 채우는 값)."""
+    from ulsan_jobs.detail import block_text, page_soup
+    from ulsan_jobs.jobinfo import extract_info
+
+    try:
+        soup = page_soup(fetch(url).content)
+    except Exception as exc:  # noqa: BLE001
+        print(f"PAGEINFO {clip(url, 140)}\n  ERROR {type(exc).__name__}: {clip(str(exc), 200)}")
+        return
+    print(f"PAGEINFO {clip(url, 140)}")
+    print(f"  info={extract_info(None, block_text(soup))}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--detail", nargs="*", default=None, help="상세 구조를 볼 소스 id")
@@ -338,6 +353,7 @@ def main() -> int:
     parser.add_argument("--data", default="", help="--form-post 에 더할 값 (a=1&b=2)")
     parser.add_argument("--attach", action="store_true", help="--url(상세 페이지)의 첨부 공고문을 내려받아 글자와 마감일 확인")
     parser.add_argument("--attach-template", default=None, help="--attach 에서 쓸 첨부 주소 틀 (sources.yaml 의 attachment_template)")
+    parser.add_argument("--page-info", action="store_true", help="--url(상세 페이지) 본문 글자로 찾은 강사잇다 칸만 출력")
     args = parser.parse_args()
     global RAW, RAW_FROM, GREP, FOLLOW_JS, FORM_POST
     RAW, RAW_FROM = args.raw, args.raw_from
@@ -364,6 +380,10 @@ def main() -> int:
     if args.attach:
         for url in args.url:
             attach_report(url, args.attach_template, args.around)
+        return 0
+    if args.page_info:
+        for url in args.url:
+            page_info_report(url)
         return 0
     if args.parse:
         logging.basicConfig(level=logging.WARNING, format="  [%(levelname)s] %(message)s")

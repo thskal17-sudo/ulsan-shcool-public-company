@@ -15,7 +15,7 @@ import re
 
 
 # 찾는 방법을 고치면 올린다. 저장된 정보의 버전이 다르면 다음 실행 때 공고문을 다시 읽는다
-INFO_VERSION = 4
+INFO_VERSION = 5
 
 
 def _words(*words: str) -> str:

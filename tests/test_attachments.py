@@ -6,6 +6,7 @@ from datetime import date
 from ulsan_jobs.attachments import extract_text, find_attachments, hwp_records_text
 from ulsan_jobs.dates import extract_deadline
 from ulsan_jobs.detail import page_soup
+from ulsan_jobs.jobinfo import extract_info
 
 DETAIL = """
 <div class="file">
@@ -57,6 +58,33 @@ def test_hwpx_text_and_deadline():
     text = extract_text(_hwpx(NOTICE))
     assert "원서접수 : 2026. 9. 21.(월) 09:00 ~ 9. 25.(금) 18:00" in text
     assert extract_deadline(text, date(2026, 9, 22), anywhere=False) == date(2026, 9, 25)
+
+
+
+def test_hwpx_text_drops_field_parameters():
+    # 동천국민체육센터 공고문: 이메일 하이퍼링크의 설정값이 본문 글자에 섞여
+    # 'HWPHYPERLINK_TYPE_HWP…shoot777@uic.or.kr' 가 이메일로 들어갔다
+    link = (
+        '<hp:ctrl><hp:fieldBegin type="HYPERLINK"><hp:parameters cnt="5">'
+        '<hp:integerParam name="Prop">0</hp:integerParam><hp:stringParam name="Command">;0;0;0;</hp:stringParam>'
+        '<hp:stringParam name="Category">HWPHYPERLINK_TYPE_HWP</hp:stringParam>'
+        '<hp:stringParam name="TargetType">HWPHYPERLINK_TARGET_BOOKMARK</hp:stringParam>'
+        '<hp:stringParam name="DocOpenType">HWPHYPERLINK_JUMP_CURRENTTAB</hp:stringParam>'
+        "</hp:parameters></hp:fieldBegin></hp:ctrl>"
+    )
+    empty = '<hp:ctrl><hp:fieldBegin type="CLICKHERE"><hp:parameters cnt="0"/></hp:fieldBegin></hp:ctrl>'
+    body = (
+        "<hp:p><hp:run><hp:t>라. 접수방법 : 이메일(e-mail) 접수</hp:t></hp:run></hp:p>"
+        f"<hp:p><hp:run>{empty}<hp:t>- 이메일(e-mail) 주소 : </hp:t>{link}<hp:t>shoot777@uic.or.kr</hp:t>"
+        "<hp:ctrl><hp:fieldEnd/></hp:ctrl></hp:run></hp:p>"
+    )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("Contents/section0.xml", f'<hs:sec xmlns:hp="p" xmlns:hs="s">{body}</hs:sec>')
+    text = extract_text(buf.getvalue())
+    assert "- 이메일(e-mail) 주소 : shoot777@uic.or.kr" in text  # 빈 설정값(<…/>) 뒤 글자도 그대로
+    assert "HWPHYPERLINK" not in text
+    assert extract_info(text)["email"] == "shoot777@uic.or.kr"
 
 
 def test_hwp_records_text_skips_controls():
