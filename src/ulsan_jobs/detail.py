@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import re
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, CData, NavigableString, Tag
 
 _ELLIPSIS = re.compile(r"(\.{2,}|…)\s*$")
 _TITLE_TAGS = ["h1", "h2", "h3", "h4", "h5", "th", "td", "dt", "dd", "p", "strong", "b", "span", "div", "li", "caption"]
@@ -36,6 +36,40 @@ def page_soup(content: bytes) -> BeautifulSoup:
 
 def page_text(soup: BeautifulSoup) -> str:
     return soup.get_text(" ")
+
+
+# 줄을 나누는 요소. 나머지(span·b·a·font 같은 글자 꾸밈)는 앞뒤 글자와 한 줄로 잇는다
+_BLOCK_TAGS = frozenset(
+    "address article aside blockquote br caption dd div dl dt fieldset figcaption figure form h1 h2 h3 h4 h5 h6 "
+    "hr li main ol p pre section table tbody td tfoot th thead tr ul".split()
+)
+
+
+def block_text(soup: BeautifulSoup) -> str:
+    """문단·표 칸·줄바꿈마다 한 줄씩 나눈 본문 글자 (화면에 보이는 줄과 같게).
+
+    get_text("\n") 은 태그마다 줄을 나눠서, 글자 조각마다 <span> 을 씌운 공고(천상고)가
+        <p><span>가</span><span>. </span><span>해당과목 교원자격증 소지자</span></p>
+    '가' / '.' / '해당과목 교원자격증 소지자' 세 줄로 갈라진다.
+    """
+    out: list[str] = []
+    stack = [iter(soup.children)]
+    closes = [False]  # 그 단계를 다 읽은 뒤 줄을 바꿀지
+    while stack:
+        child = next(stack[-1], None)
+        if child is None:
+            stack.pop()
+            if closes.pop():
+                out.append("\n")
+        elif isinstance(child, Tag):
+            block = child.name in _BLOCK_TAGS
+            if block:
+                out.append("\n")
+            stack.append(iter(child.children))
+            closes.append(block)
+        elif type(child) in (NavigableString, CData):  # get_text 처럼 주석·doctype 은 뺀다
+            out.append(" ".join(str(child).splitlines()))  # HTML 소스의 줄바꿈은 화면에서 빈칸
+    return "".join(out)
 
 
 # 제목과 같은 칸에 붙어 나오는 글 정보 (예: '… 모집 공고 작성자 관리자 작성일 2026-09-16 조회수 133')

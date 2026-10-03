@@ -16,7 +16,7 @@ from .classify import categorize, judge
 from .collectors import COLLECTORS, NotConfigured
 from .config import DEFAULT_CONFIG_DIR, Rules, Source, load_rules, load_settings
 from .dates import extract_deadline, first_period_end
-from .detail import extends, full_title, looks_truncated, page_text
+from .detail import block_text, extends, full_title, looks_truncated, page_text
 from .gangsaitda import TEMPLATE_NAME, build_gangsaitda
 from .http import HostUnreachable, Http, is_connect_failure
 from .jobinfo import INFO_VERSION, extract_info
@@ -211,7 +211,7 @@ def _collect_source(
                     store.set_title(p.uid, full)
             if not notice_read:
                 notice = _attachment_text(collector, soup, p, budget)
-            info = extract_info(notice, soup.get_text("\n"))
+            info = extract_info(notice, block_text(soup))
             store.set_info(p.uid, {**info, "v": INFO_VERSION})
             log.info("공고문 정보 %s → %s", p.title, info or "못 찾음")
 

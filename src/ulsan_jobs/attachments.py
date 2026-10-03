@@ -117,6 +117,9 @@ def _hwpx_text(content: bytes) -> str:
         names = sorted(n for n in zf.namelist() if re.match(r"Contents/section\d+\.xml$", n))
         for name in names:
             xml = zf.read(name).decode("utf-8", "ignore")
+            # 하이퍼링크 같은 필드의 설정값(<hp:parameters>)은 본문 글자가 아니다. 그대로 두면
+            # '0;0;0;0;HWPHYPERLINK_TYPE_HWP…shoot777@uic.or.kr' 처럼 이메일·주소 앞에 붙는다
+            xml = re.sub(r"<(\w+):parameters\b(?:[^>]*/>|.*?</\1:parameters>)", "", xml, flags=re.S)
             xml = re.sub(r"</\w+:(p|tc|tr)>", "\n", xml)
             xml = re.sub(r"<\w+:tab\b[^>]*/>", "\t", xml)
             parts.append(html.unescape(re.sub(r"<[^>]+>", "", xml)))
