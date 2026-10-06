@@ -104,6 +104,29 @@ def test_json_board_items():
     assert items[1]["title"] == "테마특강 수강생 모집 & 안내"
 
 
+def test_json_board_spring_page_items():
+    # 울산문화관광재단 /api/notices: {content: [...]} 에 글 번호 id, 작성일 registrationDatetime
+    from ulsan_jobs.collectors.json_board import parse_json_items
+
+    payload = {
+        "content": [
+            {"id": "202411272958", "title": "제7차 기간제 근로자 채용 공고", "content": "<p>본문</p>",
+             "state": "진행중", "registrationDatetime": "2026-10-06 09:05:49"},
+        ],
+        "totalElements": 1,
+    }
+    opts = {
+        "items_key": "content",
+        "key_field": "id",
+        "date_fields": ["registrationDatetime"],
+        "link_template": "https://www.uctf.or.kr/board/employment/view/{key}",
+    }
+    items = parse_json_items(payload, opts, TODAY)
+    assert items[0]["key"] == "202411272958"
+    assert items[0]["url"] == "https://www.uctf.or.kr/board/employment/view/202411272958"
+    assert items[0]["posted"] == date(2026, 10, 6)
+
+
 def test_ujcmc_style_template(fixture_bytes):
     html = """<table><tr><th>번호</th><th>제목</th><th>작성자</th><th>등록일</th></tr>
     <tr><td>528</td><td><a href="javascript:boardView('employ','528','');">중구수영장 시간강사(프리랜서) 모집 공고</a></td>

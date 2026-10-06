@@ -567,6 +567,123 @@ sources:
     enabled: false  # 목록이 표가 아니라 글마다 POST 폼 + 대부분 수강생 모집 글 → 넣지 않음
     verified: false
 
+  - id: junggu_library
+    name: 중구 구립도서관 - 공지사항
+    org_type: 평생교육·도서관
+    district: 중구
+    collector: generic_board
+    url: https://lib.junggu.ulsan.kr/lib/bbs/list.do?bbsId=BBS_0000000000000001&mId=001005001000000000
+    pages: 1  # 쪽 이동이 POST 라서 첫 쪽만 본다
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: dataId
+      org_name: 울산중구구립도서관
+
+  # ─────────────────────────────── 문화시설 (문화예술회관·문화원·박물관·문화재단)
+  - id: ucac_notice
+    name: 울산문화예술회관 - 공지사항
+    org_type: 문화시설
+    district: 남구
+    collector: generic_board
+    url: https://www.ulsan.go.kr/ucac/art/page.do?mnu_code=mnu003001
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      page_param: pageNo
+      key_param: bod_sn
+      org_name: 울산문화예술회관
+
+  - id: junggu_artscenter
+    name: 중구문화의전당 - 공지사항
+    org_type: 문화시설
+    district: 중구
+    collector: generic_board
+    url: https://artscenter.junggu.ulsan.kr/05_Menu/01.do
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      # 제목 링크는 fn_egov_select('글번호', '-1') 로 폼 제출 → 상세는 GET 으로도 열림
+      link_template: "https://artscenter.junggu.ulsan.kr/05_Menu/01_view.do?prcValue={0}"
+      org_name: 중구문화의전당
+
+  - id: bukgu_art
+    name: 북구문화예술회관 - 공지사항
+    org_type: 문화시설
+    district: 북구
+    collector: generic_board
+    url: https://www.bukgu.ulsan.kr/art/BBS_002List.mo
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      # 제목 링크는 fn_egov_inqire_notice('글번호', 'bukguart') → 상세는 GET 으로도 열림
+      link_template: "https://www.bukgu.ulsan.kr/art/BBS_002Article.mo?nttId={0}"
+      org_name: 북구문화예술회관
+
+  - id: udcc_notice
+    name: 동구문화원 - 공지사항
+    org_type: 문화시설
+    district: 동구
+    collector: generic_board
+    url: https://www.udcc.or.kr/cummunity/notice.php
+    pages: 1  # 한 쪽에 20건(약 반년치)
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: bid
+      org_name: 울산동구문화원
+
+  - id: museum_notice
+    name: 울산박물관 - 공지사항
+    org_type: 문화시설
+    district: 남구
+    collector: generic_board
+    url: https://www.ulsan.go.kr/s/museum/bbs/list.ulsan?bbsId=BBS_0000000000000101&mId=001007001000000000
+    pages: 1  # 쪽 이동이 POST 라서 첫 쪽만 본다
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: dataId
+      org_name: 울산박물관
+
+  - id: uctf_employment
+    name: 울산문화관광재단 - 채용
+    org_type: 문화시설
+    district: 울산전체
+    collector: json_board  # 목록을 스크립트(Vue)로 불러오는 게시판
+    url: https://www.uctf.or.kr/board/employment
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true  # 응답(JSON)은 러너에서 확인: {content: [{id, title, registrationDatetime, state, ...}]}
+    options:
+      api_url: https://www.uctf.or.kr/api/notices
+      method: get
+      data:
+        page: 0  # 쪽 번호가 0부터 (0쪽 = 최신 10건)
+        category: 채용
+      items_key: content
+      key_field: id
+      date_fields: [registrationDatetime]
+      link_template: "https://www.uctf.or.kr/board/employment/view/{key}"
+      org_name: 울산문화관광재단
+
   # ─────────────────────────────── 시 산하기관
   - id: ubpi_hire
     name: 울산경제일자리진흥원 - 채용정보
@@ -604,3 +721,6 @@ sources:
   # - 동구·울주 도서관, 중구청소년센터(ulsan1318.net): 스크립트로만 열리는 페이지(봇 차단)
   # - 중구청 홈페이지 채용공고(BBS_0000060): 중구청 새올(junggu_eminwon)과 같은 글이라 중복
   # - 인크루트 채용대행 사이트(uncmc/uljusiseol.incruit.com): 정규 채용 전용, 강사 공고는 공단 홈페이지에 올라옴
+  # - 울주문화예술회관·울주문화재단(ucf.or.kr): 해외 IP 접속 차단
+  # - 중구·남구·북구·울주 문화원: 따로 된 홈페이지(게시판)를 찾지 못함
+  # - 울산가족문화센터: 공지 게시판 없음 (울산시설공단 강습위탁 공고로 들어옴)

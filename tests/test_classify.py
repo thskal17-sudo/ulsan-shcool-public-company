@@ -26,6 +26,7 @@ from ulsan_jobs.classify import categorize, infer_district, infer_org_type, judg
         ("[중부청소년수련관]2026년 문화강좌 4분기 교육강사 긴급 위·수탁 모집 최종수탁자 공고(안)", False, "", None),
         ("[남부청소년수련관] 2026년 남부청소년수련관 주말 수영 강사(긴급) 위·수탁 대상 결정 공고", False, "", None),
         ("2026년 노동복지관 수영장안전관리 단시간근로자 서류심사 결정 공고(5차)", False, "", None),
+        ("2026년 4학기 북구문화예술회관 아카데미 강의계획서 및 강사소개서", True, "", None),
     ],
 )
 def test_judge(rules, title, keyword_filter, label, expected):
@@ -57,6 +58,8 @@ def test_categorize_negative_terms(rules):
 def test_infer_org_type_and_district():
     assert infer_org_type("울산광역시남구도시관리공단") == "공단(체육시설)"
     assert infer_org_type("척과초등학교") == "교육청·학교"
+    assert infer_org_type("울산문화예술회관") == "문화시설"
+    assert infer_org_type("울산중구구립도서관") == "평생교육·도서관"
     assert infer_org_type("무엇", "기본") == "기본"
     assert infer_district("울산광역시 동구") == "동구"
     assert infer_district("울산광역시", "울산전체") == "울산전체"
