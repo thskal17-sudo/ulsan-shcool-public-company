@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS mail_log (
 
 
 CLOSED = "결과발표"  # 결과공고가 올라와 모집이 끝난 공고
+EXCLUDED = "제외"  # 모집공고로 저장했지만 지금 규칙으로는 강사 공고가 아닌 글
 
 
 def _d(value: str | None) -> date | None:
@@ -118,12 +119,13 @@ class Store:
         """결과공고가 올라와 모집이 끝난 공고로 표시 (신규·진행중에서 빠진다)."""
         self.conn.execute("UPDATE postings SET status = ? WHERE uid = ?", (CLOSED, uid))
 
-    def close_if_open(self, uid: str) -> str | None:
-        """전에 모집공고로 저장했지만 지금 규칙으로는 결과공고인 글을 닫는다. 닫았으면 그 제목."""
+    def close_if_open(self, uid: str, status: str = CLOSED) -> str | None:
+        """전에 모집공고로 저장했지만 지금 규칙으로는 결과공고(또는 강사 공고가 아닌 글)인 글을 닫는다.
+        닫았으면 그 제목. 규칙이 다시 바뀌어 모집공고로 판정되면 upsert 가 '모집중'으로 되돌린다 (결과발표 제외)."""
         row = self.conn.execute("SELECT title FROM postings WHERE uid = ? AND status = '모집중'", (uid,)).fetchone()
         if row is None:
             return None
-        self.mark_closed(uid)
+        self.conn.execute("UPDATE postings SET status = ? WHERE uid = ?", (status, uid))
         return row[0]
 
     def detail_state(self, uid: str) -> tuple[date | None, dict | None, str]:

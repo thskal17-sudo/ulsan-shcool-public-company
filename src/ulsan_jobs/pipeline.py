@@ -24,7 +24,7 @@ from .matching import finished_by
 from .mailer import MailConfig, build_message, html_body, send, subject_line, text_body
 from .models import Posting, SourceResult, now_kst
 from .report_excel import build_report, sort_key
-from .storage import Store
+from .storage import EXCLUDED, Store
 
 log = logging.getLogger(__name__)
 
@@ -165,6 +165,10 @@ def _collect_source(
 
         status = judge(p.title, rules, src.keyword_filter, p.label, keep_results=True)
         if status is None:
+            # 제외 낱말이 늘기 전에 모집공고로 저장된 글이면 진행중에서 뺀다 ('늘봄학교 자원봉사자 모집', 2026-10-08)
+            excluded = store.close_if_open(p.uid, EXCLUDED)
+            if excluded:
+                log.info("강사 공고 아님으로 다시 분류: %s", excluded)
             continue
         if status == "결과공고":
             result_notices.append(p)

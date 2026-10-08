@@ -27,6 +27,8 @@ from ulsan_jobs.classify import categorize, infer_district, infer_org_type, judg
         ("[남부청소년수련관] 2026년 남부청소년수련관 주말 수영 강사(긴급) 위·수탁 대상 결정 공고", False, "", None),
         ("2026년 노동복지관 수영장안전관리 단시간근로자 서류심사 결정 공고(5차)", False, "", None),
         ("2026년 4학기 북구문화예술회관 아카데미 강의계획서 및 강사소개서", True, "", None),
+        ("2026학년도 늘봄학교 자원봉사자 모집 공고", True, "", None),
+        ("울산광역시남구자원봉사센터 교육강사 모집", True, "", "모집중"),
     ],
 )
 def test_judge(rules, title, keyword_filter, label, expected):
