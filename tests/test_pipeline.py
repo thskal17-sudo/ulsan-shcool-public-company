@@ -412,3 +412,26 @@ def test_posting_stored_before_a_new_result_word_is_closed(env, monkeypatch):
     outcome = run(tmp_path, config, send_mail=False)
     assert DECIDED.title not in [p.title for p in outcome.active + outcome.new]
     assert [p.title for p in outcome.new] == ["수영 강사 모집", "방과후 독서논술 강사 모집"]
+
+
+VOLUNTEER = Posting("fake", "2026학년도 늘봄학교 자원봉사자 모집 공고", "https://example.org/10", "10", "구영초등학교")
+
+
+class VolunteerCollector(Collector):
+    def collect(self):
+        return [Posting(**{**p.__dict__}) for p in POSTS] + [Posting(**{**VOLUNTEER.__dict__})]
+
+
+def test_posting_stored_before_a_new_exclude_word_is_dropped(env, monkeypatch):
+    # '봉사자'를 제외 낱말로 넣기 전에 모집공고로 저장된 글은 다음 수집 때 진행중에서 빠진다
+    tmp_path, config, sent = env
+    store = Store(tmp_path / "db.sqlite")
+    store.upsert(Posting(**{**VOLUNTEER.__dict__}), NOW)
+    store.close()
+    monkeypatch.setitem(COLLECTORS, "fake", VolunteerCollector)
+
+    outcome = run(tmp_path, config, send_mail=False)
+    assert VOLUNTEER.title not in [p.title for p in outcome.active + outcome.new]
+    store = Store(tmp_path / "db.sqlite")
+    assert store.detail_state(VOLUNTEER.uid)[2] == "제외"
+    store.close()

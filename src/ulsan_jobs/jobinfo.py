@@ -15,7 +15,7 @@ import re
 
 
 # 찾는 방법을 고치면 올린다. 저장된 정보의 버전이 다르면 다음 실행 때 공고문을 다시 읽는다
-INFO_VERSION = 5
+INFO_VERSION = 6
 
 
 def _words(*words: str) -> str:
@@ -42,12 +42,16 @@ _OTHER = _words(
     "접수기간", "접수방법", "접수처", "전형방법", "선발방법", "심사방법", "전형일정", "문의처", "문의",
     "보수", "강사료", "근무조건", "근무장소", "기타사항", "유의사항", "합격자발표", "결과발표",
 )
-_BULLET = r"(?:[○◦●■□▶▷◆◇※·ㆍ•\-*▪]|\(?\d{1,2}[).]|\(?[가나다라마바사아자차카타파하][).]|[①-⑳])"
+_DOTS = "·ㆍ•․‧∙⋅・"  # 가운뎃점 모양 글머리표 (한글 공고문은 '․'(U+2024)도 쓴다)
+_BULLET = rf"(?:[○◦●■□▶▷◆◇※{_DOTS}\-*▪]|\(?\d{{1,2}}[).]|\(?[가나다라마바사아자차카타파하][).]|[①-⑳])"
 _PATTERNS = {
     key: re.compile(rf"^(?:{_BULLET}\s*)*(?:{label})(?![가-힣])\s*[:：]?\s*(.*)$")
     for key, label in {**LABELS, "other": _OTHER}.items()
 }
-_ITEM = re.compile(r"^(?:[-·ㆍ•*◦○▪]|[①-⑳]|\(?\d{1,2}\)|[가나다라마바사아자차카타파하]\.)\s*")
+_ITEM = re.compile(rf"^(?:[-{_DOTS}*◦○▪]|[①-⑳]|\(?\d{{1,2}}\)|[가나다라마바사아자차카타파하]\.)\s*")
+_NUMBERED = re.compile(r"^(\d{1,2})\.\s*(\S.*)$")
+# 자격 값이 아래 번호 항목을 가리키는 머리말: '내국인으로서 다음 각 호에 해당하는 자'
+_INTRO = re.compile(r"(?:다음|아래).{0,20}(?:해당|충족|갖춘|만족).{0,12}(?:자|사람|분)\s*[:：]?$")
 _HEADING_TAIL = re.compile(r"^(?:및|과|와|등|의|에\s)")  # '1. 모집분야 및 인원' 같은 제목 줄
 _MULTI = {"qualification", "documents"}
 
@@ -130,6 +134,28 @@ def _items_below(lines: list[str], start: int, key: str, window: int = 8) -> lis
     return None
 
 
+def _numbered_below(lines: list[str], start: int) -> list[str] | None:
+    """바로 아래 '1. … / 2. …' 번호 항목 (4개까지). 번호 사이의 세부 항목(가. 나.)·※ 줄은 건너뛴다.
+
+        가. 응시자격 : 내국인(대한민국 국적자)으로서 다음 각 호에 해당하는 자
+        1.「국민체육진흥법」… 체육지도자 / 2. … 교사 자격증을 가진 사람 / 가. 중등학교 체육 정교사 / 3. …
+    """
+    items: list[str] = []
+    skipped = 0
+    for line in lines[start:]:
+        if len(items) >= 4 or _label_of(line) is not None:
+            break
+        m = _NUMBERED.match(line)
+        if m and int(m.group(1)) == len(items) + 1:
+            items.append(m.group(2))
+            skipped = 0
+        elif not items or skipped >= 3:
+            break
+        else:
+            skipped += 1
+    return items or None
+
+
 def _raw_fields(lines: list[str]) -> dict[str, str]:
     """항목 이름 → 값 글자 (칸마다 처음 찾은 쓸 만한 것)."""
     out: dict[str, str] = {}
@@ -181,17 +207,26 @@ def _raw_fields(lines: list[str]) -> dict[str, str]:
                     out[key] = "\n".join(below)
                     i += 1
                     continue
+        intro = key in _MULTI and bool(_INTRO.search(value))
+        if key in _MULTI and (intro or not value) and key not in out:
+            numbered = _numbered_below(lines, i + 1)
+            if numbered:
+                out[key] = "\n".join(numbered)
+                i += 1
+                continue
         items: list[str] = [value] if value else []
         j = i + 1
         while j < len(lines) and _label_of(lines[j]) is None:
             nxt = lines[j]
-            if key in _MULTI and len(items) < 4 and (_ITEM.match(nxt) or not items):
+            if key in _MULTI and len(items) < (5 if intro else 4) and (_ITEM.match(nxt) or not items):
                 items.append(_ITEM.sub("", nxt))
             elif not items:
                 items.append(nxt)
             else:
                 break
             j += 1
+        if intro and len(items) > 1:
+            items = items[1:]  # 머리말 대신 아래 항목들
         if items and key != "other" and _usable(key, items[0]):
             out.setdefault(key, "\n".join(items) if key in _MULTI else items[0])
         i = j if items else i + 1
