@@ -42,10 +42,11 @@ sources:
     link: https://github.com/thskal17-sudo/Lifelong-Education-pyengsang-/blob/main/reports/{date}.md
     # 그 저장소 report 가 매일 같이 커밋하는 강사잇다 양식 (합본 엑셀에 넣는다)
     upload_url: https://raw.githubusercontent.com/thskal17-sudo/Lifelong-Education-pyengsang-/main/reports/gangsaitda/latest.xlsx
-  # 부산 강사 공고(busan-school-company)가 매일 돌기 시작하면 enabled: true 로 바꾼다.
-  # 울산과 같은 구조라 그 저장소 state 브랜치의 DB 를 읽는다.
+  # 부산 강사 공고(busan-school-company): 울산과 같은 구조라 그 저장소 state 브랜치의 DB 를 읽는다 (매일 02:07 KST 수집).
+  # 그 저장소가 DB 와 함께 state 브랜치에 두는 강사잇다 양식(gangsaitda_latest.xlsx)을 합본 엑셀·사이트 자동 등록에 넣는다.
   - id: busan
     name: 부산
     type: ulsan_db
     repo: https://github.com/thskal17-sudo/busan-school-company
-    enabled: false
+    upload_url: https://raw.githubusercontent.com/thskal17-sudo/busan-school-company/state/gangsaitda_latest.xlsx
+    enabled: true

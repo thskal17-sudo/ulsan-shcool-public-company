@@ -93,13 +93,13 @@ GitHub 예약 실행은 몇 시간씩 밀리곤 해서(2~4시간 관측) 새벽�
 - 월요일에는 캠프 영업 현황 문서 링크가 맨 위에 붙습니다
 - 보내는 때: 이 저장소의 수집이 끝날 때마다 확인해 **모든 곳의 오늘 자료가 모이면** 보냅니다.
   09:00 KST 가 지나면 도착한 것만으로 보내고, 도착 안 한 곳을 표시합니다. **하루 한 번만** 보냅니다.
-- 설정: [config/briefing.yaml](config/briefing.yaml) — 부산 강사 공고가 돌기 시작하면 `busan` 을 `enabled: true` 로
+- 설정: [config/briefing.yaml](config/briefing.yaml) — 울산·경남·대학평생교육원·부산 네 곳 (부산은 2026-10-09 부터)
 - 필요한 Secret: `BRIEFING_TO` (받는 주소, 여러 명이면 쉼표로 구분). 보내는 계정은 `SMTP_USER`
 - 시험 발송: **Actions → 오늘의 브리핑 → Run workflow** 에서 `force` 를 켜고 실행
 
 - **강사잇다 합본 엑셀 첨부**: 울산 DB 의 마감 전 공고와, 경남·대학평생교육원 저장소가 매일 커밋하는
-  `reports/gangsaitda/latest.xlsx` (그날 보고서가 도착한 곳만)를 강사잇다 양식 한 파일(`강사잇다_부울경_YYYY-MM-DD.xlsx`)로
-  합쳐 붙입니다. 제목·기관이 같은 줄은 하나만, 마감 빠른 순, '보류' 줄은 맨 뒤. 강사잇다 관리자 화면에 이 파일 하나만 올리면 됩니다.
+  `reports/gangsaitda/latest.xlsx`, 부산 저장소가 state 브랜치에 두는 `gangsaitda_latest.xlsx` (그날 자료가 도착한 곳만)를
+  강사잇다 양식 한 파일(`강사잇다_부울경_YYYY-MM-DD.xlsx`)로 합쳐 붙입니다. 제목·기관이 같은 줄은 하나만, 마감 빠른 순, '보류' 줄은 맨 뒤. 강사잇다 관리자 화면에 이 파일 하나만 올리면 됩니다.
 - **강사잇다 사이트 자동 등록**: 합본 줄을 사이트의 받는 문(`config/briefing.yaml` 의 `gangsaitda.import_url`,
   `https://www.gangsaitda.com/api/jobs/import`)으로 보냅니다. 사이트가 엑셀 올리기와 같은 규칙으로 확인해 바로 올립니다
   (같은 제목은 건너뛰므로 여러 번 보내도 두 번 올라가지 않음, '보류' 줄은 건너뜀). 결과(새로 N건, 건너뜀, 넣지 못한 줄)는 메일과
