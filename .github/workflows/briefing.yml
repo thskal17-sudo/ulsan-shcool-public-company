@@ -65,6 +65,7 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
           BRIEFING_TO: ${{ secrets.BRIEFING_TO }}
+          GANGSAITDA_IMPORT_TOKEN: ${{ secrets.GANGSAITDA_IMPORT_TOKEN }} # 강사잇다 사이트 자동 등록 열쇠 (없으면 엑셀 첨부만)
           SEND_MAIL: ${{ github.event_name != 'workflow_dispatch' || inputs.send_mail }}
           FORCE: ${{ inputs.force }}
         run: |

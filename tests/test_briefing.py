@@ -220,3 +220,106 @@ def test_share_text_format():
         "- 수영 강사 모집 (울산 · D-day)\n"
         "전체 보기: [사이트 주소]"
     )
+
+
+class _Resp:
+    def __init__(self, status: int, body: dict):
+        self.status_code, self._body = status, body
+
+    def json(self):
+        return self._body
+
+
+def test_push_upload_batches_and_sums(monkeypatch):
+    from ulsan_jobs.briefing import push_upload
+
+    calls = []
+
+    def post(url, json, headers, timeout):
+        calls.append((url, headers, json["rows"]))
+        n = len(json["rows"])
+        return _Resp(200, {"received": n, "created": n - 1,
+                           "skipped": [{"title": "x", "reason": "같은 제목"}],
+                           "failed": [{"title": "y", "reason": "마감"}] if len(calls) == 1 else []})
+
+    rows = [{"제목": f"공고 {i}", "마감일": date(2026, 10, 15), "모집 인원": 2, "처리": None} for i in range(250)]
+    r = push_upload(rows, "https://www.gangsaitda.com/api/jobs/import", "secret-token", post=post)
+    assert len(calls) == 2 and [len(c[2]) for c in calls] == [200, 50]
+    assert calls[0][1] == {"Authorization": "Bearer secret-token"}
+    assert calls[0][2][0] == {"제목": "공고 0", "마감일": "2026-10-15", "모집 인원": 2, "처리": None}  # 날짜는 글자로
+    assert (r.sent, r.created, r.skipped, r.failed, r.error) == (250, 248, 2, [("y", "마감")], "")
+
+
+def test_push_upload_reports_rejection_and_connection_error():
+    import requests
+
+    from ulsan_jobs.briefing import push_upload
+
+    rows = [{"제목": "a"}]
+    r = push_upload(rows, "https://x", "t", post=lambda *a, **k: _Resp(401, {"error": "열쇠가 맞지 않아요."}))
+    assert r.error == "사이트가 거절함 (HTTP 401) 열쇠가 맞지 않아요." and r.created == 0
+
+    def boom(*a, **k):
+        raise requests.exceptions.ConnectionError("down")
+
+    r = push_upload(rows, "https://x", "t", post=boom)
+    assert r.error == "사이트 접속 실패: ConnectionError"
+
+
+def test_run_briefing_pushes_upload_when_token_set(tmp_path, monkeypatch):
+    from ulsan_jobs.mailer import MailConfig
+
+    upload = _gyeongnam_upload(tmp_path)
+    fetch = lambda url: (upload if url.endswith(".xlsx") else REPORT.encode()) if "Gyeongnam" in url else None  # noqa: E731
+    sent, posted = [], []
+    monkeypatch.setattr("ulsan_jobs.mailer.MailConfig.from_env",
+                        classmethod(lambda cls: MailConfig("me@x.com", "pw", ["me@x.com"])))
+    monkeypatch.setattr("ulsan_jobs.mailer.send", lambda cfg, msg: sent.append(msg))
+    monkeypatch.setenv("BRIEFING_TO", "a@x.com")
+
+    def post(url, json, headers, timeout):
+        posted.append((url, headers["Authorization"], [r["제목"] for r in json["rows"]]))
+        return _Resp(200, {"received": len(json["rows"]), "created": 2, "failed": [],
+                           "skipped": [{"title": "어제 알린 공고", "reason": "이미"}]})
+
+    # 열쇠가 없으면 보내지 않는다
+    monkeypatch.delenv("GANGSAITDA_IMPORT_TOKEN", raising=False)
+    out = run_briefing(db_path=_db(tmp_path), state_path=tmp_path / "s1.txt", send_mail=True, force=True,
+                       config_dir=ROOT / "config", now=NOW, fetch=fetch, out_dir=tmp_path / "o1", post=post)
+    assert out.briefing.imported is None and posted == []
+    assert "/admin/jobs/upload" in sent[0].get_body(("html",)).get_content()
+
+    # 열쇠가 있으면 합본 줄을 그대로 보내고, 결과가 메일에 적힌다
+    monkeypatch.setenv("GANGSAITDA_IMPORT_TOKEN", "secret-token")
+    out = run_briefing(db_path=_db(tmp_path), state_path=tmp_path / "s2.txt", send_mail=True, force=True,
+                       config_dir=ROOT / "config", now=NOW, fetch=fetch, out_dir=tmp_path / "o2", post=post)
+    imp = out.briefing.imported
+    assert posted == [("https://www.gangsaitda.com/api/jobs/import", "Bearer secret-token",
+                       ["방과후 강사 모집", "탁구 프로그램 도급강사 공개모집", "어제 알린 공고"])]
+    assert (imp.sent, imp.created, imp.skipped, imp.error) == (3, 2, 1, "")
+    html = sent[1].get_body(("html",)).get_content()
+    assert "사이트 자동 등록: 새로 <b>2</b>건" in html and "다시 올리지 않아도 됩니다" in html
+
+    # 메일을 안 보내는 시험 실행에서는 사이트도 건드리지 않는다
+    out = run_briefing(db_path=_db(tmp_path), state_path=tmp_path / "s3.txt", send_mail=False, force=True,
+                       config_dir=ROOT / "config", now=NOW, fetch=fetch, out_dir=tmp_path / "o3", post=post)
+    assert out.briefing.imported is None and len(posted) == 1
+
+
+def test_run_briefing_mail_still_goes_when_site_rejects(tmp_path, monkeypatch):
+    from ulsan_jobs.mailer import MailConfig
+
+    upload = _gyeongnam_upload(tmp_path)
+    fetch = lambda url: (upload if url.endswith(".xlsx") else REPORT.encode()) if "Gyeongnam" in url else None  # noqa: E731
+    sent = []
+    monkeypatch.setattr("ulsan_jobs.mailer.MailConfig.from_env",
+                        classmethod(lambda cls: MailConfig("me@x.com", "pw", ["me@x.com"])))
+    monkeypatch.setattr("ulsan_jobs.mailer.send", lambda cfg, msg: sent.append(msg))
+    monkeypatch.setenv("BRIEFING_TO", "a@x.com")
+    monkeypatch.setenv("GANGSAITDA_IMPORT_TOKEN", "wrong")
+    out = run_briefing(db_path=_db(tmp_path), state_path=tmp_path / "s.txt", send_mail=True, force=True,
+                       config_dir=ROOT / "config", now=NOW, fetch=fetch, out_dir=tmp_path / "o",
+                       post=lambda *a, **k: _Resp(401, {"error": "열쇠가 맞지 않아요."}))
+    assert out.sent and out.briefing.imported.error.startswith("사이트가 거절함 (HTTP 401)")
+    html = sent[0].get_body(("html",)).get_content()
+    assert "사이트 자동 등록 실패" in html and "/admin/jobs/upload" in html
