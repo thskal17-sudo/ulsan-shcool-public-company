@@ -186,6 +186,14 @@ def cmd_briefing(args) -> int:
             regions = ", ".join(f"{k} {v}" for k, v in up.by_region.items()) or "없음"
             missing = f" · 빠진 곳: {', '.join(up.missing)}" if up.missing else ""
             print(f"::notice title=강사잇다 합본 엑셀::{up.rows}줄 (보류 {up.held}) · {regions}{missing}")
+        imp = b.imported
+        if imp is not None:
+            if imp.error:
+                print(f"::warning title=강사잇다 자동 등록 실패::{imp.error}")
+            else:
+                failed = f" · 넣지 못함 {len(imp.failed)}" if imp.failed else ""
+                print(f"::notice title=강사잇다 자동 등록::새로 {imp.created}건"
+                      f" (보낸 {imp.sent}줄, 건너뜀 {imp.skipped}){failed}")
         if b.share_text:
             print("::notice title=강사방 공유 글::" + b.share_text.replace("%", "%25").replace("\n", "%0A"))
     print(f"\n=== 오늘의 브리핑 {b.today} ===")
@@ -195,6 +203,10 @@ def cmd_briefing(args) -> int:
     c = b.camp
     print(f"  캠프 수주   {'도착' if c.ready else '미도착'} · 바로지원 {len(c.go)} · 검토 {len(c.review)} · 참고 {len(c.ref)}")
     print(f"판단: {out.reason}")
+    imp = b.imported
+    if imp is not None:
+        print("강사잇다 자동 등록: " + (f"실패 — {imp.error}" if imp.error
+                                    else f"새로 {imp.created}건 (보낸 {imp.sent}줄, 건너뜀 {imp.skipped})"))
     print("메일: 발송함" if out.sent else "메일: 보내지 않음")
     return 0
 

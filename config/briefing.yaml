@@ -12,7 +12,10 @@ max_items: 15
 # 강사잇다 운영: 세 지역 강사잇다 양식을 한 파일로 합쳐 첨부하고, 강사방 공유용 요약 글을 메일 맨 아래에 넣는다
 gangsaitda:
   enabled: true
-  site_url: ""  # 강사잇다 주소가 정해지면 적는다 (비우면 공유 글에 '[사이트 주소]')
+  site_url: "https://www.gangsaitda.com"  # 공유 글에 들어가는 사이트 주소
+  # 사이트 자동 등록: 합본 줄을 이 주소(받는 문)로 보내면 사이트가 엑셀 올리기와 같은 규칙으로 확인해 올린다.
+  # GitHub Secret GANGSAITDA_IMPORT_TOKEN (사이트 Vercel 의 JOB_IMPORT_TOKEN 과 같은 값)이 있을 때만 보낸다. 비우면 보내지 않는다.
+  import_url: "https://www.gangsaitda.com/api/jobs/import"
   share_max: 10  # 공유 글에 넣을 공고 수 (나머지는 '외 N건')
 # 월요일 브리핑에 넣을 캠프 영업 현황 문서
 weekly_links:

@@ -83,6 +83,7 @@ class Briefing:
     camp: CampSummary
     links: list[dict] = field(default_factory=list)
     upload: "UploadFile | None" = None  # 강사잇다 합본 엑셀
+    imported: "ImportResult | None" = None  # 사이트에 자동 등록한 결과 (열쇠가 있을 때만)
     share_text: str = ""  # 강사방 공유용 요약 글
 
     @property
@@ -297,6 +298,18 @@ class UploadFile:
     held: int = 0  # '보류' 줄 (마감일 확인 필요)
     by_region: dict[str, int] = field(default_factory=dict)
     missing: list[str] = field(default_factory=list)  # 이번 파일에 못 넣은 곳 (도착 전·읽기 실패)
+    data: list[dict] = field(default_factory=list)  # 합본 줄 (칸 이름 → 값). 사이트로 보낼 때 쓴다
+
+
+@dataclass
+class ImportResult:
+    """강사잇다 사이트 '받는 문'(/api/jobs/import)에 보낸 결과."""
+
+    sent: int = 0  # 보낸 줄 수
+    created: int = 0  # 사이트에 새로 올라간 공고 수
+    skipped: int = 0  # 건너뛴 줄 (이미 있음·보류)
+    failed: list[tuple[str, str]] = field(default_factory=list)  # (제목, 이유) — 사이트가 넣지 못한 줄
+    error: str = ""  # 보내기 자체가 실패한 이유 (열쇠 틀림, 접속 실패 등)
 
 
 def _as_date(value) -> date | None:
@@ -385,10 +398,56 @@ def build_upload(cfg: dict, b: Briefing, local_db: Path | None, fetch, out_dir: 
     merged.sort(key=lambda r: (r.get("처리") == HOLD, _as_date(r.get("마감일")) or date.max, str(r.get("지역", ""))))
     out.rows = len(merged)
     out.held = sum(1 for r in merged if r.get("처리") == HOLD)
+    out.data = merged
     if merged:
         out.path = write_rows(out_dir / f"강사잇다_부울경_{b.today.isoformat()}.xlsx", merged,
                               config_dir / TEMPLATE_NAME)
     return out
+
+
+IMPORT_BATCH = 200  # 사이트가 한 번에 받는 최대 줄 수
+
+
+def _json_value(value):
+    """엑셀 칸 값을 JSON 으로 보낼 수 있는 모양으로 (날짜는 '2026-10-15')."""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return str(value)
+
+
+def push_upload(rows: list[dict], url: str, token: str, post=None) -> ImportResult:
+    """합본 줄을 강사잇다 사이트의 받는 문으로 보낸다. 사이트가 엑셀 올리기와 같은 규칙으로 확인해 올린다.
+
+    같은 제목은 사이트가 건너뛰므로 하루에 여러 번 보내도 공고가 두 번 올라가지 않는다.
+    '보류' 줄도 그대로 보내고 사이트가 건너뛴다 (돌아온 결과에 남게).
+    """
+    import requests
+
+    post = post or requests.post
+    result = ImportResult(sent=len(rows))
+    for start in range(0, len(rows), IMPORT_BATCH):
+        batch = [{k: _json_value(v) for k, v in r.items()} for r in rows[start:start + IMPORT_BATCH]]
+        try:
+            resp = post(url, json={"rows": batch}, headers={"Authorization": f"Bearer {token}"}, timeout=60)
+        except requests.exceptions.RequestException as exc:
+            result.error = f"사이트 접속 실패: {type(exc).__name__}"
+            return result
+        if resp.status_code != 200:
+            try:
+                detail = str(resp.json().get("error", ""))
+            except ValueError:
+                detail = ""
+            result.error = f"사이트가 거절함 (HTTP {resp.status_code}) {detail}".strip()
+            return result
+        body = resp.json()
+        result.created += int(body.get("created", 0))
+        result.skipped += len(body.get("skipped", []))
+        result.failed += [(str(f.get("title", "")), str(f.get("reason", ""))) for f in body.get("failed", [])]
+    return result
 
 
 def _place(it: Item, sec: Section) -> str:
@@ -540,12 +599,27 @@ def html_body(b: Briefing, limit: int = 15) -> str:
     # 3. 강사잇다 운영: 합본 엑셀 안내 + 강사방 공유 글
     parts.append("<h3 style='margin:18px 0 4px;border-bottom:2px solid #1f4e78'>📋 강사잇다 올리기 · 강사방 공유</h3>")
     up = b.upload
+    imp = b.imported
+    if imp is not None:
+        if imp.error:
+            parts.append(f"<p style='margin:4px 0;color:#b45309'>⚠ 사이트 자동 등록 실패: {escape(imp.error)}"
+                         " — 첨부 엑셀을 관리자 화면 <b>/admin/jobs/upload</b> 에 직접 올려 주세요.</p>")
+        else:
+            parts.append(f"<p style='margin:4px 0'>✅ 사이트 자동 등록: 새로 <b>{imp.created}</b>건 올라감"
+                         f" (보낸 {imp.sent}줄 중 이미 있거나 보류라 건너뜀 {imp.skipped}줄"
+                         + (f", 넣지 못함 {len(imp.failed)}줄" if imp.failed else "") + ")</p>")
+            if imp.failed:
+                items = "".join(f"<li>{escape(t)} — {escape(r)}</li>" for t, r in imp.failed[:10])
+                parts.append(f"<ul style='margin:0 0 6px;font-size:13px;color:#b45309'>{items}</ul>")
     if up is not None and up.path is not None:
         regions = ", ".join(f"{k} {v}" for k, v in up.by_region.items())
+        how = ("확인용으로 붙였습니다 (사이트에 이미 올라갔으니 다시 올리지 않아도 됩니다)"
+               if imp is not None and not imp.error
+               else "강사잇다 관리자 화면 <b>/admin/jobs/upload</b> 에 이 파일 하나만 올리면 됩니다")
         parts.append(
             f"<p style='margin:4px 0'>📎 첨부 <b>{escape(up.path.name)}</b> — 세 지역 마감 전 공고 <b>{up.rows}</b>줄 ({escape(regions)})"
             + (f", 그중 마감일을 못 찾은 {up.held}줄은 '처리' 칸에 '보류'" if up.held else "")
-            + ". 강사잇다 관리자 화면 <b>/admin/jobs/upload</b> 에 이 파일 하나만 올리면 됩니다.</p>")
+            + f". {how}.</p>")
     if up is not None and up.missing:
         parts.append(f"<p style='margin:4px 0;color:#b45309;font-size:13px'>합본에 빠진 곳: {escape(', '.join(up.missing))}"
                      " — 그 지역 메일의 엑셀을 따로 올려 주세요.</p>")
@@ -608,6 +682,7 @@ def run_briefing(
     fetch=None,
     out_html: Path | None = None,
     out_dir: Path | None = None,
+    post=None,
 ) -> BriefingOutcome:
     cfg = load_config(config_dir)
     now = now or now_kst()
@@ -621,6 +696,15 @@ def run_briefing(
             b.upload = build_upload(cfg, b, db_path, fetch, out_dir, config_dir)
         except Exception as exc:  # noqa: BLE001 — 엑셀이 실패해도 브리핑은 보낸다
             b.upload = UploadFile(missing=[f"합본 엑셀 실패: {type(exc).__name__}: {exc}"[:200]])
+        # 사이트 자동 등록: 받는 문 주소(설정)와 열쇠(GANGSAITDA_IMPORT_TOKEN)가 둘 다 있을 때만.
+        # 메일을 안 보내는 시험 실행(--no-mail)에서는 사이트도 건드리지 않는다.
+        import_url = str(cfg.get("gangsaitda", {}).get("import_url") or "").strip()
+        token = os.environ.get("GANGSAITDA_IMPORT_TOKEN", "").strip()
+        if send_mail and import_url and token and b.upload is not None and b.upload.data:
+            try:
+                b.imported = push_upload(b.upload.data, import_url, token, post=post)
+            except Exception as exc:  # noqa: BLE001 — 등록이 실패해도 브리핑은 보낸다 (엑셀을 직접 올리면 됨)
+                b.imported = ImportResult(sent=len(b.upload.data), error=f"{type(exc).__name__}: {exc}"[:200])
     already = state_path.exists() and state_path.read_text(encoding="utf-8").strip() == today.isoformat()
     go, reason = should_send(b, now, cfg, already, force)
     html = html_body(b, int(cfg.get("max_items", 15)))

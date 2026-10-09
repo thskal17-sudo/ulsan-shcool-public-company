@@ -100,8 +100,13 @@ GitHub 예약 실행은 몇 시간씩 밀리곤 해서(2~4시간 관측) 새벽�
 - **강사잇다 합본 엑셀 첨부**: 울산 DB 의 마감 전 공고와, 경남·대학평생교육원 저장소가 매일 커밋하는
   `reports/gangsaitda/latest.xlsx` (그날 보고서가 도착한 곳만)를 강사잇다 양식 한 파일(`강사잇다_부울경_YYYY-MM-DD.xlsx`)로
   합쳐 붙입니다. 제목·기관이 같은 줄은 하나만, 마감 빠른 순, '보류' 줄은 맨 뒤. 강사잇다 관리자 화면에 이 파일 하나만 올리면 됩니다.
+- **강사잇다 사이트 자동 등록**: 합본 줄을 사이트의 받는 문(`config/briefing.yaml` 의 `gangsaitda.import_url`,
+  `https://www.gangsaitda.com/api/jobs/import`)으로 보냅니다. 사이트가 엑셀 올리기와 같은 규칙으로 확인해 바로 올립니다
+  (같은 제목은 건너뛰므로 여러 번 보내도 두 번 올라가지 않음, '보류' 줄은 건너뜀). 결과(새로 N건, 건너뜀, 넣지 못한 줄)는 메일과
+  실행 기록에 적힙니다. Secret `GANGSAITDA_IMPORT_TOKEN` 이 있을 때만 보내고, 없거나 실패하면 전처럼 엑셀만 첨부합니다.
+  `--no-mail` 시험 실행에서는 사이트에 보내지 않습니다.
 - **강사방 공유 글**: 오늘 새 공고의 제목·지역·D-day 로 만든 요약 글을 메일 맨 아래에 넣습니다 (복사해서 강사방에 붙여 넣기).
-  사이트 주소는 `config/briefing.yaml` 의 `gangsaitda.site_url` 에 적으면 글에 들어갑니다 (비우면 '[사이트 주소]').
+  사이트 주소는 `config/briefing.yaml` 의 `gangsaitda.site_url` 에 적습니다.
 
 ## 설정 방법 (처음 한 번)
 
@@ -120,6 +125,7 @@ GitHub 예약 실행은 몇 시간씩 밀리곤 해서(2~4시간 관측) 새벽�
 | `SMTP_APP_PASSWORD` | 위에서 만든 앱 비밀번호 16자리 | ✅ |
 | `MAIL_TO` | 받는 주소 (여러 명이면 쉼표로 구분). 비우면 `SMTP_USER` 로 보냄 | |
 | `WORK24_API_KEY` | [고용24 Open API](https://www.work24.go.kr/cm/e/a/0110/selectOpenApiIntro.do) 채용정보 인증키 | |
+| `GANGSAITDA_IMPORT_TOKEN` | 강사잇다 사이트 자동 등록 열쇠. 사이트(Vercel)의 `JOB_IMPORT_TOKEN` 과 **같은 값**. 없으면 엑셀 첨부만 | |
 
 `WORK24_API_KEY` 가 없으면 고용24만 건너뛰고 나머지는 정상 수집합니다 (수집현황에 '설정필요'로 표시).
 
