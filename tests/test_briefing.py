@@ -99,9 +99,9 @@ def test_gather_reads_all_sources(tmp_path):
     assert by["ulsan"].problems == ["s2"]
     assert by["gyeongnam"].ready and len(by["gyeongnam"].new) == 2
     assert not by["lifelong"].ready
-    assert "busan" not in by  # 아직 꺼 둠
+    assert "busan" in by and not by["busan"].ready  # 부산 DB 가 아직 없으면 '미도착'
     assert b.camp.ready and [i.title for i in b.camp.go] == ["진로캠프 운영"]
-    assert b.missing == ["대학평생교육원"]
+    assert b.missing == ["대학평생교육원", "부산"]
     assert "강사 신규 3건" in subject_line(b) and "캠프 바로지원 1건" in subject_line(b)
     html = html_body(b)
     assert "아직 오늘 자료가 도착하지 않은 곳" in html and "진로캠프 운영" in html
@@ -185,7 +185,7 @@ def test_briefing_attaches_merged_upload_and_share_text(tmp_path, monkeypatch):
                        config_dir=ROOT / "config", now=NOW, fetch=fetch, out_html=tmp_path / "out" / "b.html")
     up = out.briefing.upload
     assert up.path.name == "강사잇다_부울경_2026-09-30.xlsx"
-    assert up.by_region == {"울산": 2, "경남": 2} and up.missing == ["대학평생교육원"]
+    assert up.by_region == {"울산": 2, "경남": 2} and up.missing == ["대학평생교육원", "부산"]
     rows = read_rows(up.path.read_bytes())
     assert [r["제목"] for r in rows] == ["방과후 강사 모집", "탁구 프로그램 도급강사 공개모집", "어제 알린 공고"]
     assert rows[1]["메모"] == "경남 수집" and up.rows == 3
@@ -195,6 +195,32 @@ def test_briefing_attaches_merged_upload_and_share_text(tmp_path, monkeypatch):
     html = msg.get_body(("html",)).get_content()
     assert "강사방에 붙여 넣을 글" in html and "합본에 빠진 곳: 대학평생교육원" in html
     assert out.briefing.share_text.splitlines()[0] == "[오늘의 부울경 강사 공고] 9/30(수) 새 공고 3건"
+
+
+def test_upload_merges_busan_state_file(tmp_path):
+    """부산: state 브랜치의 DB 로 '오늘 수집했는가'를 보고, 같은 브랜치의 양식 엑셀을 합본에 넣는다."""
+    from ulsan_jobs.briefing import build_upload
+    from ulsan_jobs.gangsaitda import read_rows, write_rows
+
+    db = _db(tmp_path)  # 오늘 수집 기록이 있는 DB (부산 저장소도 같은 구조)
+    busan_xlsx = write_rows(tmp_path / "bs.xlsx", [
+        {"제목": "부산 돌봄 강사 모집", "기관명": "부산초", "지역": "부산 북구", "마감일": "2026-10-10",
+         "수업 일정": "원문 공고 참고", "상세 내용": "돌봄", "원문 링크": "https://example.com/bs"},
+    ], ROOT / "config" / "gangsaitda_template.xlsx").read_bytes()
+
+    def fetch(url):
+        if "busan-school-company" in url:
+            return busan_xlsx if url.endswith(".xlsx") else db.read_bytes()
+        return None
+
+    cfg = load_config(ROOT / "config")
+    b = gather(cfg, TODAY, db, fetch)
+    assert {s.id: s.ready for s in b.sections} == {"ulsan": True, "gyeongnam": False, "lifelong": False, "busan": True}
+    up = build_upload(cfg, b, db, fetch, tmp_path / "out", ROOT / "config")
+    assert up.by_region == {"울산": 2, "부산": 1} and up.missing == ["경남", "대학평생교육원"]
+    rows = read_rows(up.path.read_bytes())
+    assert [(r["제목"], r["메모"]) for r in rows if "부산" in r["지역"]] == [("부산 돌봄 강사 모집", "부산 수집")]
+    assert len(up.data) == 3  # 사이트로 보낼 줄에도 부산이 들어간다
 
 
 def test_share_text_format():

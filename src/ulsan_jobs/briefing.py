@@ -350,7 +350,7 @@ def _key(row: dict) -> str:
 
 def build_upload(cfg: dict, b: Briefing, local_db: Path | None, fetch, out_dir: Path,
                  config_dir: Path = DEFAULT_CONFIG_DIR) -> UploadFile:
-    """세 지역 강사잇다 양식을 한 파일로. 오늘 보고서가 도착한 곳만 넣는다 (어제 파일이 섞이지 않게)."""
+    """지역별 강사잇다 양식을 한 파일로. 오늘 자료가 도착한 곳만 넣는다 (어제 파일이 섞이지 않게)."""
     from .gangsaitda import HOLD, TEMPLATE_NAME, read_rows, write_rows
 
     out = UploadFile()
@@ -617,7 +617,7 @@ def html_body(b: Briefing, limit: int = 15) -> str:
                if imp is not None and not imp.error
                else "강사잇다 관리자 화면 <b>/admin/jobs/upload</b> 에 이 파일 하나만 올리면 됩니다")
         parts.append(
-            f"<p style='margin:4px 0'>📎 첨부 <b>{escape(up.path.name)}</b> — 세 지역 마감 전 공고 <b>{up.rows}</b>줄 ({escape(regions)})"
+            f"<p style='margin:4px 0'>📎 첨부 <b>{escape(up.path.name)}</b> — 부울경 마감 전 공고 <b>{up.rows}</b>줄 ({escape(regions)})"
             + (f", 그중 마감일을 못 찾은 {up.held}줄은 '처리' 칸에 '보류'" if up.held else "")
             + f". {how}.</p>")
     if up is not None and up.missing:
