@@ -173,3 +173,51 @@ def test_form_board_posts_search_form_with_token():
         ("울산 강사 모집 1", "1", "https://job.example.kr/recruitview.do?idx=1"),
         ("울산 강사 모집 2", "2", "https://job.example.kr/recruitview.do?idx=2"),
     ]
+
+
+def test_work24_search_rows(fixture_bytes):
+    # 고용24 채용정보 상세검색 화면 (srcKeyword=방과후, region=31000) 실제 결과 표에서 3줄
+    from ulsan_jobs.collectors.work24_web import parse_work24_search
+
+    items = parse_work24_search(fixture_bytes("work24_search_afterschool.html"))
+    assert [i["company"] for i in items] == ["윤슬주식회사", "주식회사처용스쿨", "아이숲어린이집"]
+    school = items[1]
+    assert school["title"] == "방과후 컴퓨터 강사 모집 [중부새일센터채용대행]"
+    assert school["key"] == "KF10202608140001"
+    assert school["url"].startswith("https://www.work24.go.kr/wk/a/b/1500/empDetailAuthView.do?wantedAuthNo=KF10202608140001")
+    assert (school["site"], school["closing"], school["registered"]) == ("울산광역시 동구 꽃바위6길", "2026-10-13", "2026-08-14")
+    # 검색어 강조(<strong>방과</strong><strong>후</strong>)가 있어도 전체 제목은 체크박스 값에서 읽는다
+    assert items[0]["title"] == "발달장애인주간활동서비스 / 청소년발달장애학생방과후활동서비스"
+
+
+def test_work24_web_collector_filters_and_dedups(fixture_bytes):
+    from ulsan_jobs.collectors.work24_web import Work24WebCollector
+    from ulsan_jobs.config import Source
+
+    class _Resp:
+        url = "https://www.work24.go.kr/wk/a/b/1200/retriveDtlEmpSrchList.do"
+        content = fixture_bytes("work24_search_afterschool.html")
+
+    class _Http:
+        def __init__(self):
+            self.keywords = []
+
+        def get(self, url, params=None):
+            self.keywords.append(params["srcKeyword"])
+            return _Resp()
+
+    src = Source(
+        id="work24_web_afterschool", name="고용24 검색", org_type="방과후 업체(민간)", district="울산전체",
+        collector="work24_web",
+        options={"keywords": ["방과후", "늘봄"], "company_exclude": "학원|요양", "title_exclude": "발달장애|활동서비스"},
+    )
+    http = _Http()
+    postings = Work24WebCollector(src, http, TODAY).collect()
+    assert http.keywords == ["방과후", "늘봄"]
+    # 두 검색어 결과에 같은 공고가 나와도 한 번만, 발달장애인 활동서비스 공고는 뺀다
+    assert [p.org_name for p in postings] == ["주식회사처용스쿨", "아이숲어린이집"]
+    school = postings[0]
+    assert school.district == "동구"
+    assert (school.posted_date, school.deadline) == (date(2026, 8, 14), date(2026, 10, 13))
+    assert school.org_type == "방과후 업체(민간)"
+    assert school.detail_url == school.url
