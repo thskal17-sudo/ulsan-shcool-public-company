@@ -351,7 +351,7 @@ def _key(row: dict) -> str:
 def build_upload(cfg: dict, b: Briefing, local_db: Path | None, fetch, out_dir: Path,
                  config_dir: Path = DEFAULT_CONFIG_DIR) -> UploadFile:
     """지역별 강사잇다 양식을 한 파일로. 오늘 자료가 도착한 곳만 넣는다 (어제 파일이 섞이지 않게)."""
-    from .gangsaitda import HOLD, TEMPLATE_NAME, read_rows, write_rows
+    from .gangsaitda import HOLD, SCHEDULE_FALLBACK, TEMPLATE_NAME, read_rows, write_rows
 
     out = UploadFile()
     rows: list[dict] = []
@@ -394,6 +394,9 @@ def build_upload(cfg: dict, b: Briefing, local_db: Path | None, fetch, out_dir: 
         if k in seen:
             continue
         seen.add(k)
+        # '수업 일정'은 사이트 필수 칸. 다른 저장소 양식에 비어 있으면 울산·부산 양식과 같은 안내로 채운다
+        if not str(r.get("수업 일정") or "").strip():
+            r["수업 일정"] = SCHEDULE_FALLBACK
         merged.append(r)
     merged.sort(key=lambda r: (r.get("처리") == HOLD, _as_date(r.get("마감일")) or date.max, str(r.get("지역", ""))))
     out.rows = len(merged)
