@@ -160,7 +160,7 @@ def _gyeongnam_upload(tmp_path) -> bytes:
         {"제목": "탁구 프로그램 도급강사 공개모집", "기관명": "창원시설공단", "지역": "경남 창원", "마감일": "2026-10-13",
          "수업 일정": "원문 공고 참고", "상세 내용": "탁구", "원문 링크": "https://example.com/b"},
         {"제목": "한국어강사 신규 채용", "기관명": "김해대", "지역": "경남 김해", "마감일": "2026-10-20",
-         "상세 내용": "한국어"},  # 수업 일정 비어 있음 → 합본에서 채운다
+         "상세 내용": "한국어", "모집 인원": 8046},  # 수업 일정 비어 있음 → 채운다. 인원은 전화번호 조각 → 비운다
         {"제목": "방과후 강사 모집", "기관명": "울산초", "지역": "울산", "마감일": "2026-10-02"},  # 울산과 겹침
         {"제목": "지난 공고", "기관명": "옛학교", "지역": "경남", "마감일": "2026-09-01"},  # 캐시된 지난 파일 대비
     ]
@@ -192,6 +192,7 @@ def test_briefing_attaches_merged_upload_and_share_text(tmp_path, monkeypatch):
     assert [r["제목"] for r in rows] == ["방과후 강사 모집", "탁구 프로그램 도급강사 공개모집", "한국어강사 신규 채용", "어제 알린 공고"]
     assert rows[1]["메모"] == "경남 수집" and up.rows == 4
     assert rows[2]["수업 일정"] == "원문 공고 참고"  # 비어 있던 필수 칸을 채웠다
+    assert "모집 인원" not in rows[2] and rows[2]["메모"] == "모집 인원 확인 필요 · 경남 수집"
     assert [r["수업 일정"] for r in up.data][2] == "원문 공고 참고"  # 사이트로 보내는 줄도 같다
     msg = sent[0]
     names = [part.get_filename() for part in msg.iter_attachments()]
@@ -225,6 +226,13 @@ def test_upload_merges_busan_state_file(tmp_path):
     rows = read_rows(up.path.read_bytes())
     assert [(r["제목"], r["메모"]) for r in rows if "부산" in r["지역"]] == [("부산 돌봄 강사 모집", "부산 수집")]
     assert len(up.data) == 3  # 사이트로 보낼 줄에도 부산이 들어간다
+
+
+def test_clean_headcount():
+    from ulsan_jobs.briefing import _clean_headcount
+
+    assert [_clean_headcount(v) for v in (2, 2.0, "2", " 3명 ", "999")] == [2, 2, 2, 3, 999]
+    assert [_clean_headcount(v) for v in (None, "", 0, 1000, 8046, "6448", "약 2명", "2~3", True)] == [None] * 9
 
 
 def test_share_text_format():

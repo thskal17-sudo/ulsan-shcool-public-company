@@ -344,6 +344,20 @@ def _ulsan_rows(db: Path, today: date, config_dir: Path) -> list[dict]:
     return [row_values(p, names.get(p.source_id, "")) for p in active]
 
 
+def _clean_headcount(value) -> int | None:
+    """'2', '2명', 2.0 → 2. 1~999 가 아니거나 숫자가 아니면 None (사이트 규칙과 같다)."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        n = int(value) if float(value).is_integer() else None
+    else:
+        m = re.fullmatch(r"\s*(\d{1,3})\s*명?\s*", str(value))
+        n = int(m.group(1)) if m else None
+    return n if n is not None and 1 <= n <= 999 else None
+
+
 def _key(row: dict) -> str:
     return re.sub(r"\s+", "", str(row.get("제목", ""))) + "|" + re.sub(r"\s+", "", str(row.get("기관명", "")))
 
@@ -397,6 +411,12 @@ def build_upload(cfg: dict, b: Briefing, local_db: Path | None, fetch, out_dir: 
         # '수업 일정'은 사이트 필수 칸. 다른 저장소 양식에 비어 있으면 울산·부산 양식과 같은 안내로 채운다
         if not str(r.get("수업 일정") or "").strip():
             r["수업 일정"] = SCHEDULE_FALLBACK
+        # '모집 인원'은 사이트가 1~999 숫자만 받는다. 전화번호 조각 등 엉뚱한 값이면 비우고 메모에 남긴다
+        headcount = _clean_headcount(r.get("모집 인원"))
+        if headcount != r.get("모집 인원"):
+            r["모집 인원"] = headcount
+            if headcount is None:
+                r["메모"] = " · ".join(x for x in ("모집 인원 확인 필요", str(r.get("메모") or "")) if x)
         merged.append(r)
     merged.sort(key=lambda r: (r.get("처리") == HOLD, _as_date(r.get("마감일")) or date.max, str(r.get("지역", ""))))
     out.rows = len(merged)
