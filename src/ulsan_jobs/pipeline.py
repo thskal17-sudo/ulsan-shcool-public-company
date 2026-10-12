@@ -111,6 +111,17 @@ def describe_failure(exc: Exception) -> tuple[str, str]:
     return "오류", f"목록을 읽다가 오류 ({type(exc).__name__}: {exc})"[:200]
 
 
+def is_network_failure(exc: Exception) -> bool:
+    """연결이 도중에 끊기거나 응답이 너무 느린 실패인가 (인증서 오류·서버의 오류 응답은 아님).
+
+    울산시청 서버(ulsan.go.kr)처럼 수집 서버의 지역에 따라 연결을 끊는 곳이 있어, 이런 실패는
+    접속불가와 같이 다른 서버에서 하는 보충 수집에 넣는다 (2026-10-12 시험공고·문화예술회관·박물관).
+    """
+    if isinstance(exc, requests.exceptions.SSLError):
+        return False
+    return isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.Timeout))
+
+
 def _collect_source(
     src: Source, rules: Rules, store: Store, http: Http, now: datetime, budget: dict[str, int]
 ) -> SourceResult:
@@ -136,6 +147,7 @@ def _collect_source(
         log.warning("수집 실패 %s: %s", src.id, exc)
         log.debug("상세", exc_info=True)
         result.state, result.error = describe_failure(exc)
+        result.retry_elsewhere = is_network_failure(exc)
         return result
 
     result.fetched = len(items)

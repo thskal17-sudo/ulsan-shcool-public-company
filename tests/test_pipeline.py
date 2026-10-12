@@ -255,6 +255,28 @@ def test_failure_descriptions_are_plain():
     assert "해외 접속 차단" in pipeline.describe_failure(requests.exceptions.ConnectTimeout("t"))[1]
 
 
+def test_dropped_or_slow_connections_go_to_the_other_server():
+    # 연결이 도중에 끊기거나 응답이 느린 실패는 수집 서버 지역 탓일 수 있어 보충 수집 대상 (울산시청 서버, 2026-10-12)
+    import requests
+    from http.client import RemoteDisconnected
+    from urllib3.exceptions import ProtocolError
+
+    from ulsan_jobs.models import SourceResult
+
+    dropped = requests.exceptions.ConnectionError(ProtocolError("Connection aborted.", RemoteDisconnected("closed")))
+    assert pipeline.describe_failure(dropped) == ("오류", "연결이 도중에 끊김")
+    assert pipeline.is_network_failure(dropped)
+    assert pipeline.is_network_failure(requests.exceptions.ReadTimeout("slow"))
+    resp = requests.Response()
+    resp.status_code = 400
+    assert not pipeline.is_network_failure(requests.exceptions.HTTPError(response=resp))
+    assert not pipeline.is_network_failure(requests.exceptions.SSLError("certificate has expired"))
+    assert not pipeline.is_network_failure(ValueError("표 모양이 다름"))
+
+    assert SourceResult("a", "A", state="오류", retry_elsewhere=True).needs_other_server
+    assert not SourceResult("b", "B", state="오류").needs_other_server
+
+
 class UnreachableCollector(Collector):
     calls = 0
 
@@ -279,6 +301,35 @@ def test_unreachable_source_is_retried_and_listed_for_other_server(env, monkeypa
     ])
     assert code == 0
     assert UnreachableCollector.calls == 2
+    assert retry_file.read_text(encoding="utf-8") == "broken"
+
+
+class DroppedCollector(Collector):
+    calls = 0
+
+    def collect(self):
+        import requests
+        from http.client import RemoteDisconnected
+        from urllib3.exceptions import ProtocolError
+
+        DroppedCollector.calls += 1
+        raise requests.exceptions.ConnectionError(ProtocolError("Connection aborted.", RemoteDisconnected("closed")))
+
+
+def test_dropped_source_is_listed_for_other_server(env, monkeypatch, tmp_path):
+    # 연결이 끊긴 소스도 끝에서 한 번 더 시도하고, 그래도 안 되면 다른 서버 보충 수집 목록에 오른다 (상태는 '오류' 그대로)
+    from ulsan_jobs.__main__ import main
+
+    _, config, _ = env
+    DroppedCollector.calls = 0
+    monkeypatch.setitem(COLLECTORS, "fake_broken", DroppedCollector)
+    retry_file = tmp_path / "retry.txt"
+    code = main([
+        "--config", str(config), "run", "--no-mail",
+        "--db", str(tmp_path / "db.sqlite"), "--out", str(tmp_path / "out"), "--retry-list", str(retry_file),
+    ])
+    assert code == 0
+    assert DroppedCollector.calls == 2
     assert retry_file.read_text(encoding="utf-8") == "broken"
 
 

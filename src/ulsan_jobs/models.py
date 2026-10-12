@@ -54,6 +54,8 @@ class SourceResult:
     new: int = 0
     error: str = ""
     samples: list[str] = field(default_factory=list)
+    # 연결이 도중에 끊기거나 응답이 너무 느린 실패: 수집 서버(해외 지역)에 따라 달라서 다른 서버에서 다시 해 볼 만함
+    retry_elsewhere: bool = False
 
     @property
     def is_problem(self) -> bool:
@@ -67,5 +69,5 @@ class SourceResult:
 
     @property
     def needs_other_server(self) -> bool:
-        """다른 수집 서버에서 다시 수집해 볼 만한가 (접속불가, 또는 시간이 모자라 건너뜀)."""
-        return self.state in ("접속불가", "시간초과")
+        """다른 수집 서버에서 다시 수집해 볼 만한가 (접속불가, 연결 끊김·응답 지연, 또는 시간이 모자라 건너뜀)."""
+        return self.state in ("접속불가", "시간초과") or self.retry_elsewhere
