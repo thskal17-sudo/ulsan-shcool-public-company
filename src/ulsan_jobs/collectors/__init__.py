@@ -1,6 +1,7 @@
 from .afschool import AfschoolCollector
 from .base import Collector, NotConfigured
 from .board import BoardCollector, FormBoardCollector
+from .cleaneye_api import CleaneyeCollector
 from .json_board import JsonBoardCollector
 from .work24_api import Work24Collector
 from .work24_web import Work24WebCollector
@@ -14,6 +15,7 @@ COLLECTORS: dict[str, type[Collector]] = {
     "json_board": JsonBoardCollector,
     "work24_api": Work24Collector,
     "work24_web": Work24WebCollector,
+    "cleaneye_api": CleaneyeCollector,
 }
 
 __all__ = ["COLLECTORS", "Collector", "NotConfigured"]

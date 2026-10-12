@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+<openXmlEmployInfo-header><resultCode>0</resultCode><resultMsg>SUCCESS_INFO</resultMsg></openXmlEmployInfo-header>
+<openXmlEmployInfo-body><items>
+<item><ENT_NAME>울산광역시남구도시관리공단</ENT_NAME><ENT_TITLE>2026년 남구국민체육센터 수영 강사 모집 공고</ENT_TITLE><ENT_GB>지방공단</ENT_GB><PUB_DATE>2026-10-12</PUB_DATE><PUB_END_DATE>2026-10-20</PUB_END_DATE><STATUS>모집중</STATUS><URL>https://job.cleaneye.go.kr/user/ypCareersData.do?idx=80300</URL><DUTY_DETAIL>-</DUTY_DETAIL><WORK_PLACE>-</WORK_PLACE></item>
+<item><ENT_NAME>재단법인 울주복지재단</ENT_NAME><ENT_TITLE>(재)울주복지재단 2026년 제10회 기간제근로자 채용 공고</ENT_TITLE><ENT_GB>지방출연기관</ENT_GB><PUB_DATE>2026-10-08</PUB_DATE><PUB_END_DATE>2026-10-16</PUB_END_DATE><STATUS>모집중</STATUS><URL>https://job.cleaneye.go.kr/user/ypCareersData.do?idx=80111</URL><DUTY_DETAIL>사무보조</DUTY_DETAIL><WORK_PLACE>null</WORK_PLACE></item>
+</items></openXmlEmployInfo-body>
+</response>
