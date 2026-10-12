@@ -79,7 +79,8 @@ jobs:
         run: bash scripts/state_db.sh save
 
   # 구·군청 등 일부 사이트는 수집 서버(GitHub 가 배정하는 해외 서버)의 지역에 따라 접속이 막힌다.
-  # 접속 안 된 사이트가 있으면 새 서버를 받아 그 사이트만 한 번 더 수집하고, 새 공고가 있을 때만 보충 메일을 보낸다.
+  # 접속 안 된(또는 연결이 도중에 끊긴·응답이 너무 느린) 사이트가 있으면 새 서버를 받아 그 사이트만 한 번 더 수집하고,
+  # 새 공고가 있을 때만 보충 메일을 보낸다.
   catch-up:
     needs: collect
     if: needs.collect.outputs.retry_sources != ''

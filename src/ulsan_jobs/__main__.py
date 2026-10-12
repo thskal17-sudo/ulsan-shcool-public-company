@@ -241,7 +241,7 @@ def main(argv: list[str] | None = None) -> int:
     p_run.add_argument("--source", nargs="*", help="이 소스만 수집")
     p_run.add_argument("--max-phase", type=int, default=None, help="이 단계까지의 소스 수집 (기본: sources.yaml 의 max_phase)")
     p_run.add_argument(
-        "--retry-list", default=None, help="다른 서버에서 다시 수집할 소스 id(접속불가·시간초과)를 이 파일에 공백으로 적음"
+        "--retry-list", default=None, help="다른 서버에서 다시 수집할 소스 id(접속불가·연결 끊김·응답 지연·시간초과)를 이 파일에 공백으로 적음"
     )
     p_run.add_argument(
         "--catch-up", action="store_true", help="보충 수집: --source 소스만 다시 수집하고 새 공고가 있을 때만 메일"
