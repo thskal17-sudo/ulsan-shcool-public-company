@@ -16,8 +16,11 @@ sidoCd: 007002 부산 · 007003 대구 · 007007 울산 · 007014 경북 · 0070
 from __future__ import annotations
 
 import os
+import re
 import xml.etree.ElementTree as ET
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
+
+import requests
 
 from ..classify import infer_district, infer_org_type
 from ..dates import parse_date
@@ -46,7 +49,13 @@ class CleaneyeCollector(Collector):
         postings: list[Posting] = []
         for page in range(1, max_pages + 1):
             query = {"serviceKey": key, "type": "xml", "sidoCd": sido, "pageNo": page, "numOfRows": rows}
-            resp = self.http.get(ENDPOINT, params=query)
+            try:
+                resp = self.http.get(ENDPOINT, params=query)
+            except requests.RequestException as exc:
+                # requests 의 오류 문구에는 요청 주소(serviceKey 포함)가 들어간다. 공개 저장소의
+                # Actions 로그에 '수집 실패 …: <오류>'로 찍히므로 키를 가린 뒤 다시 던진다
+                scrub_secret(exc, key)
+                raise
             items = parse_cleaneye_xml(resp.content)
             postings.extend(self._to_posting(item) for item in items if item.get("ENT_TITLE"))
             if len(items) < rows:
@@ -69,6 +78,28 @@ class CleaneyeCollector(Collector):
             deadline=parse_date(item.get("PUB_END_DATE"), self.today),
             label=detail if detail not in ("", "-", "null") else "",
         )
+
+
+_KEY_QUERY = re.compile(r"(?i)(servicekey=)[^&\s'\"]+")
+
+
+def scrub_secret(exc: BaseException, key: str) -> None:
+    """예외(와 안에 든 urllib3 예외)의 메시지에서 인증키를 지운다. 종류는 그대로 둔다."""
+    forms = {f for f in (key, quote(key, safe=""), quote(key)) if f}
+
+    def clean(value):
+        if isinstance(value, str):
+            for f in forms:
+                value = value.replace(f, "***")
+            return _KEY_QUERY.sub(r"\1***", value)
+        if isinstance(value, BaseException):
+            scrub_secret(value, key)
+        return value
+
+    exc.args = tuple(clean(a) for a in exc.args)
+    for attr in ("url",):
+        if isinstance(getattr(exc, attr, None), str):
+            setattr(exc, attr, clean(getattr(exc, attr)))
 
 
 def parse_cleaneye_xml(content: bytes) -> list[dict[str, str]]:

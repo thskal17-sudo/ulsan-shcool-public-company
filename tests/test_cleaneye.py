@@ -60,3 +60,18 @@ def test_missing_key_is_not_configured(monkeypatch):
     monkeypatch.delenv("G2B_API_KEY", raising=False)
     with pytest.raises(NotConfigured):
         CleaneyeCollector(_source(), _Http(b""), TODAY).collect()
+
+
+def test_request_error_hides_key(monkeypatch):
+    import requests
+
+    monkeypatch.setenv("G2B_API_KEY", "SECRET+KEY/123")
+
+    class _Boom:
+        def get(self, url, params=None, **kw):
+            raise requests.exceptions.HTTPError(
+                "500 Server Error for url: https://apis.data.go.kr/x?serviceKey=SECRET%2BKEY%2F123&type=xml")
+
+    with pytest.raises(requests.exceptions.HTTPError) as info:
+        CleaneyeCollector(_source(), _Boom(), TODAY).collect()
+    assert "SECRET" not in str(info.value) and "serviceKey=***" in str(info.value)
