@@ -281,6 +281,9 @@ def main(argv: list[str] | None = None) -> int:
         datefmt="%H:%M:%S",
     )
     logging.getLogger("urllib3").setLevel(logging.WARNING)
+    from . import logsafe
+
+    logsafe.install()
     return args.func(args)
 
 

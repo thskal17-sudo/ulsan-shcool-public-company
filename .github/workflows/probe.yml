@@ -41,3 +41,4 @@ jobs:
           PYTHONPATH: src
           PYTHONUNBUFFERED: "1"
           CHECK_IDS: ${{ github.event.inputs.check }}
+          G2B_API_KEY: ${{ secrets.G2B_API_KEY }}  # cleaneye_api 시험용 (공공데이터포털 개인 인증키)

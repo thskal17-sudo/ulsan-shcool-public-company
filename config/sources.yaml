@@ -27,6 +27,19 @@ sources:
     phase: 1
     enabled: true
     verified: false
+  - id: cleaneye_api
+    name: 클린아이 채용정보 Open API (지방공기업·출자출연기관)
+    org_type: 공공기관
+    district: 울산전체
+    collector: cleaneye_api
+    url: https://job.cleaneye.go.kr
+    params:
+      sidoCd: "007007"   # 울산 (부산 007002, 경남 007015)
+    auth_env: G2B_API_KEY  # 공공데이터포털 개인 인증키 (나라장터와 같은 키). 15159757 활용 승인 필요
+    keyword_filter: true
+    phase: 1
+    enabled: true
+    verified: true
   - id: gojobs_list
     name: 나라일터 모집공고 (기관명에 '울산' 포함)
     org_type: 국가·공공기관

@@ -52,6 +52,7 @@ jobs:
           SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
           MAIL_TO: ${{ secrets.MAIL_TO }}
           WORK24_API_KEY: ${{ secrets.WORK24_API_KEY }}
+          G2B_API_KEY: ${{ secrets.G2B_API_KEY }}
           SEND_MAIL: ${{ github.event_name == 'schedule' || inputs.send_mail }}
           EVENT: ${{ github.event_name }}
         run: |
@@ -108,6 +109,7 @@ jobs:
           SMTP_APP_PASSWORD: ${{ secrets.SMTP_APP_PASSWORD }}
           MAIL_TO: ${{ secrets.MAIL_TO }}
           WORK24_API_KEY: ${{ secrets.WORK24_API_KEY }}
+          G2B_API_KEY: ${{ secrets.G2B_API_KEY }}
           SEND_MAIL: ${{ github.event_name == 'schedule' || inputs.send_mail }}
           RETRY_SOURCES: ${{ needs.collect.outputs.retry_sources }}
         run: |
