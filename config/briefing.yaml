@@ -1,4 +1,4 @@
-# 오늘의 브리핑: 강사 공고(울산·경남·대학평생교육원)와 캠프 수주 공고를 메일 한 통으로 묶는다.
+# 오늘의 브리핑: 강사 공고(울산·경남·대학평생교육원·부산·경북)와 캠프 수주 공고를 메일 한 통으로 묶는다.
 #   python -m ulsan_jobs briefing [--no-mail] [--force]
 # 받는 사람은 GitHub Secret BRIEFING_TO (쉼표로 구분) — 저장소가 공개라 주소를 여기 적지 않는다.
 # 기존 지역별 메일은 그대로 나가고, 이 브리핑은 추가로 한 통 더 나간다.
@@ -9,7 +9,7 @@ send_anyway_after: "09:00"
 closing_soon_days: 3
 # 섹션마다 최대 몇 건까지 보여줄지 (나머지는 '외 N건')
 max_items: 15
-# 강사잇다 운영: 세 지역 강사잇다 양식을 한 파일로 합쳐 첨부하고, 강사방 공유용 요약 글을 메일 맨 아래에 넣는다
+# 강사잇다 운영: 각 지역 강사잇다 양식을 한 파일로 합쳐 첨부하고, 강사방 공유용 요약 글을 메일 맨 아래에 넣는다
 gangsaitda:
   enabled: true
   site_url: "https://www.gangsaitda.com"  # 공유 글에 들어가는 사이트 주소
@@ -49,4 +49,12 @@ sources:
     type: ulsan_db
     repo: https://github.com/thskal17-sudo/busan-school-company
     upload_url: https://raw.githubusercontent.com/thskal17-sudo/busan-school-company/state/gangsaitda_latest.xlsx
+    enabled: true
+  # 경북 강사 공고(kyeongbuk): 부산판과 같은 구조. state 브랜치의 DB 로 '오늘 수집했는가'를 보고 (매일 06:17 KST 수집),
+  # 같은 브랜치의 강사잇다 양식(gangsaitda_latest.xlsx)을 합본 엑셀·사이트 자동 등록에 넣는다.
+  - id: gyeongbuk
+    name: 경북
+    type: ulsan_db
+    repo: https://github.com/thskal17-sudo/kyeongbuk
+    upload_url: https://raw.githubusercontent.com/thskal17-sudo/kyeongbuk/state/gangsaitda_latest.xlsx
     enabled: true
