@@ -221,3 +221,20 @@ def test_work24_web_collector_filters_and_dedups(fixture_bytes):
     assert (school.posted_date, school.deadline) == (date(2026, 8, 14), date(2026, 10, 13))
     assert school.org_type == "방과후 업체(민간)"
     assert school.detail_url == school.url
+
+
+def test_link_in_data_attribute():
+    # 울주군청 채용공고: 제목 링크가 href="#" + onclick="req.post(this)" 이고 상세 주소는 data-action 에 있다
+    html = """<table><thead><tr><th>번호</th><th>채용공고번호</th><th>제목</th><th>담당부서</th><th>등록일</th></tr></thead>
+    <tbody><tr><td>14</td><td>울산광역시 울주군 언양읍 공고 <br/> 제2026-49호</td>
+    <td class="taL list_tit"><a data-action="/ulju/unit/employ/view.do?notAncmtMgtNo=67905&amp;mId=0403030100"
+       href="#" onclick="req.post(this); return false;" title="2026년 언양읍 평생학습 강사 모집 공고">
+       2026년 언양읍 평생학습 강사 모집 공고 </a></td><td>언양읍</td><td> 2026-10-13 </td></tr></tbody></table>"""
+    base = "https://www.ulju.ulsan.kr/ulju/unit/employ/list.do?mId=0403030100"
+    rows = parse_board(html, base, {"link_attr": "data-action", "key_param": "notAncmtMgtNo"}, TODAY)
+    assert rows[0].url == "https://www.ulju.ulsan.kr/ulju/unit/employ/view.do?notAncmtMgtNo=67905&mId=0403030100"
+    assert rows[0].key == "67905" and rows[0].detail_ok
+    assert rows[0].posted == date(2026, 10, 13)
+    # 옵션이 없으면 예전처럼 (목록 주소 + 제목 키) — 다른 게시판의 공고 번호가 바뀌지 않게
+    plain = parse_board(html, base, {}, TODAY)
+    assert plain[0].url == base and not plain[0].detail_ok
