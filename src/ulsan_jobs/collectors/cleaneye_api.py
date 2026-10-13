@@ -16,9 +16,8 @@ sidoCd: 007002 부산 · 007003 대구 · 007007 울산 · 007014 경북 · 0070
 from __future__ import annotations
 
 import os
-import re
 import xml.etree.ElementTree as ET
-from urllib.parse import quote, unquote
+from urllib.parse import unquote
 
 import requests
 
@@ -26,6 +25,7 @@ from ..classify import infer_district, infer_org_type
 from ..dates import parse_date
 from ..models import Posting
 from .base import Collector, NotConfigured
+from .datagokr import scrub_secret
 
 ENDPOINT = "https://apis.data.go.kr/B551982/openApiEmployInfo/openXmlEmployInfo"
 NO_DATA = "3"
@@ -78,28 +78,6 @@ class CleaneyeCollector(Collector):
             deadline=parse_date(item.get("PUB_END_DATE"), self.today),
             label=detail if detail not in ("", "-", "null") else "",
         )
-
-
-_KEY_QUERY = re.compile(r"(?i)(servicekey=)[^&\s'\"]+")
-
-
-def scrub_secret(exc: BaseException, key: str) -> None:
-    """예외(와 안에 든 urllib3 예외)의 메시지에서 인증키를 지운다. 종류는 그대로 둔다."""
-    forms = {f for f in (key, quote(key, safe=""), quote(key)) if f}
-
-    def clean(value):
-        if isinstance(value, str):
-            for f in forms:
-                value = value.replace(f, "***")
-            return _KEY_QUERY.sub(r"\1***", value)
-        if isinstance(value, BaseException):
-            scrub_secret(value, key)
-        return value
-
-    exc.args = tuple(clean(a) for a in exc.args)
-    for attr in ("url",):
-        if isinstance(getattr(exc, attr, None), str):
-            setattr(exc, attr, clean(getattr(exc, attr)))
 
 
 def parse_cleaneye_xml(content: bytes) -> list[dict[str, str]]:
