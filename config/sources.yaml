@@ -211,13 +211,31 @@ sources:
     pages: 2
     keyword_filter: true
     phase: 2
-    enabled: true
+    enabled: false  # 2026-10 HTTP 400·접속불가가 잦아 울주군청 홈페이지 채용공고(ulju_employ)로 바꿈 (같은 공고번호)
     verified: true
     options:
       page_param: pageIndex
       org_name: 울산 울주군청
       link_template: "https://eminwon.ulju.ulsan.kr/emwp/gov/mogaha/ntis/web/ofr/action/OfrAction.do?jndinm=OfrNotAncmtEJB&context=NTIS&method=selectOfrNotAncmt&methodnm=selectOfrNotAncmtRegst&not_ancmt_mgt_no={0}&homepage_pbs_yn=Y&subCheck=Y&ofr_pageSize=10&not_ancmt_se_code=05&title=%EC%B1%84%EC%9A%A9%EA%B3%B5%EA%B3%A0&initValue=Y&countYn=Y&list_gubun=A&Key=B_Subject"
       legacy_tls: true  # 서버가 짧은 DH 키만 지원 (DH_KEY_TOO_SMALL)
+
+  - id: ulju_employ
+    name: 울주군청 채용공고(홈페이지)
+    org_type: 지자체
+    district: 울주군
+    collector: generic_board
+    url: https://www.ulju.ulsan.kr/ulju/unit/employ/list.do?mId=0403030100
+    pages: 1  # 쪽 이동이 POST(goPage). 한 쪽 10건이 약 1주치
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      # 새올과 같은 공고(공고번호 notAncmtMgtNo = 새올 not_ancmt_mgt_no)를 보여 주는 홈페이지 게시판.
+      # 제목 링크는 href="#" + req.post(this) 이고 상세 주소는 data-action 속성에 있다
+      link_attr: data-action
+      key_param: notAncmtMgtNo
+      org_name: 울산 울주군청
 
   - id: ulsan_city_exam
     name: 울산시청 시험공고

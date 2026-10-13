@@ -7,6 +7,7 @@ options (모두 선택)
     page_param      목록 페이지 번호 파라미터 이름 (예: pageIndex). 없으면 1페이지만 본다
     row_selector    행 CSS 셀렉터 (자동 판별이 틀릴 때만)
     link_template   제목 링크가 javascript 일 때 onclick 인자로 상세 주소를 만드는 틀 ({0}, {1} …)
+    link_attr       상세 주소가 href 대신 이 속성에 있을 때 (예: data-action — 울주군청 채용공고의 req.post(this))
     key_param       상세 주소에서 게시글 번호로 쓸 쿼리 파라미터 (예: q_bbsDocNo)
     form_link       true 면 onclick 으로 제출하는 <form> 의 action + hidden 값으로 상세 주소를 만든다
     detail_get      상세 페이지를 GET 으로 열 수 있으면 true (마감일 추출에 사용, 기본 true)
@@ -329,6 +330,13 @@ def _resolve_link(soup, anchor: Tag, tr: Tag, base_url: str, opts: dict) -> tupl
             return url, key_from(url, _pick_key(onclick_args)), True
         except (IndexError, KeyError):
             pass
+
+    # <a data-action="/ulju/unit/employ/view.do?notAncmtMgtNo=67905&mId=…" href="#" onclick="req.post(this)">
+    attr = opts.get("link_attr")
+    target = (anchor.get(attr) or "").strip() if attr else ""
+    if target and not target.lower().startswith("javascript"):
+        url = urljoin(base_url, target)
+        return url, key_from(url, stable_key(url)), True
 
     if href and not href.lower().startswith("javascript") and not href.startswith("#"):
         url = urljoin(base_url, href)
