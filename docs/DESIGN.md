@@ -80,7 +80,7 @@ flowchart LR
 |---|---|---|---|
 | `work24_api` | 고용24(구 워크넷) 채용정보 | Open API (XML) | 근무지역 울산(31xxx) + 키워드 "강사". 인증키 발급 필요 |
 | `alio_api` | 잡알리오 공공기관 채용정보 | 공공데이터포털 API | 근무지 울산 필터. 한국폴리텍대학 울산캠퍼스, 울산 혁신도시 기관 등 |
-| `gojobs_api` | 나라일터 공공취업정보 | 공공데이터포털 API | 중앙부처·지자체·교육청 공고 통합 |
+| `mpm_api` | 나라일터 공공취업정보 | 공공데이터포털 API | 중앙부처·지자체·교육청 공고 통합 (지역코드 31… 울산) |
 | `use_cms` | 울산교육청 CMS 게시판 (`use.go.kr/.../BD_selectBbsList.do?q_bbsSn=`) | HTML 파싱 | **같은 CMS라 파서 1개로 게시판 여러 개 처리** |
 | `afschool` | 울산방과후학교 온라인지원시스템 | HTML 파싱 | 학교별 방과후 개인위탁 강사모집이 여기 모임 → 학교 홈페이지 개별 수집 부담을 크게 줄여줌 |
 | `eminwon` | 구·군청 새올 채용공고 (`OfrNotAncmtLSub.jsp?not_ancmt_se_code=05`) | HTML 파싱 | 전국 공통 시스템이라 파서 1개로 5개 구·군 처리 |
@@ -113,7 +113,7 @@ flowchart LR
 | 평생교육 | 북구 평생학습관 | https://www.bukgu.ulsan.kr/edu/ |
 | 국가·공공 | 고용24 Open API | https://www.work24.go.kr/cm/e/a/0110/selectOpenApiIntro.do |
 | 국가·공공 | 잡알리오 공공기관 채용정보 API | https://www.data.go.kr/data/15125273/openapi.do |
-| 국가·공공 | 나라일터 공공취업정보 API | https://www.data.go.kr/data/15000485/openapi.do |
+| 국가·공공 | 나라일터 공공취업정보 API | https://www.data.go.kr/data/15156780/openapi.do |
 
 **추가 조사 필요 (Phase 2):** 중구·동구·울주군 새올 주소, 중구·동구·북구 시설(도시)관리공단, 동구·북구 여성회관,
 울산문화관광재단, 구·군 청소년수련관/청소년문화의집, 울산도서관·구립도서관, 울산 평생교육진흥원, 종합사회복지관 등.
@@ -265,7 +265,7 @@ Actions는 매번 새 서버에서 돌기 때문에 "어제까지 본 공고" �
 | `SMTP_USER`, `SMTP_APP_PASSWORD` | 메일 발송 계정 |
 | `MAIL_TO` | 수신 주소 (여러 명이면 쉼표 구분) |
 | `WORK24_API_KEY` | 고용24 Open API 인증키 |
-| `DATA_GO_KR_KEY` | 공공데이터포털 인증키 (잡알리오·나라일터) |
+| `G2B_API_KEY` | 공공데이터포털 개인 인증키 (나라일터·잡알리오·클린아이·나라장터) |
 
 ---
 
@@ -318,7 +318,8 @@ ulsan-shcool-public-company/
 │   │   ├── base.py           # 수집기 공통 인터페이스
 │   │   ├── work24_api.py
 │   │   ├── alio_api.py
-│   │   ├── gojobs_api.py
+│   │   ├── mpm_api.py        # 나라일터 (공공데이터포털)
+│   │   ├── datagokr.py       # 공공데이터포털 공통 (인증키·키 가리기)
 │   │   ├── use_cms.py        # 울산교육청 CMS 공통
 │   │   ├── afschool.py       # 방과후 온라인지원시스템
 │   │   ├── eminwon.py        # 새올 채용공고 공통
@@ -562,3 +563,19 @@ HWPX 공고문은 하이퍼링크 같은 필드의 설정값(`<hp:parameters>`)�
 - 제목 링크는 `href="#"` + `onclick="req.post(this)"`이고 상세 주소는 `data-action` 속성에 있다 →
   게시판 옵션 `link_attr: data-action` 추가 (옵션이 있는 게시판만 읽음 — 다른 게시판의 공고 번호가 바뀌지 않게).
 
+## 22. 나라일터·잡알리오를 공공데이터포털 API 로 (2026-10-13)
+
+두 사이트를 화면으로 읽던 방식은 해외 서버라서 가끔 접속불가가 났다 (9/29~10/13 32번 중 3번). 나라일터는 기관명 검색
+1쪽(10건)만 GET 으로 열려서 기관명에 '울산'이 없는 울산 소재 기관 공고는 못 봤다. 부산 수집기(busan-school-company)가 10/12에
+바꾼 방식을 그대로 가져왔다. 인증키는 클린아이와 같은 `G2B_API_KEY`(공공데이터포털 개인 인증키)이고, 첫 시험 수집에서 둘 다 응답했다.
+
+| 소스 | API | 거르는 방법 |
+|---|---|---|
+| `gojobs_list` (`mpm_api`) | 15156780 인사혁신처_공공취업정보 `1760000/PblJobService/getList` (XML) | 최근 14일 등록(`Begin_de~End_de`) 공고 중 `areacode` 가 31…(31110 중구·31140 남구·31170 동구·31200 북구·31710 울주군)인 것. 00000(미지정)이면 기관명에 '울산'이 있을 때만 |
+| `alio_recruit` (`alio_api`) | 15125273 공공기관 채용정보 `1051000/recruitment/list` (JSON) | `ongoingYn=Y`(접수 중)·`workRgnLst=R3016`(근무지 울산) |
+
+- 나라일터 API는 키워드(`Kwrd`)·정렬(`Sort_order`)을 무시하고 오래된 글부터 준다. 전국 공고라 쪽 수가 `max_pages`(20)를 넘으면
+  1쪽으로 전체 건수를 알고 끝쪽(새 글)부터 읽는다.
+- 글번호가 사이트 상세 주소와 같아서(`idx` = `empmnsn`, `recrutPblntSn` = 잡알리오 `idx`) 소스 id 와 주소를 그대로 썼다.
+- 첫 시험 수집(10/13): 나라일터 9건(울산시·울주군·울산지방해양수산청·동남지방데이터청 등), 잡알리오 14건, 강사 공고는 없었다.
+- 공공데이터포털 공통 부분(인증키 읽기·오류 문구에서 키 가리기·yyyymmdd)은 `collectors/datagokr.py` 로 모으고 클린아이도 이를 쓴다.

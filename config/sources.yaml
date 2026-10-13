@@ -57,7 +57,7 @@ sources:
     keyword_filter: true
     phase: 1
     enabled: true
-    verified: false
+    verified: true
     options:
       days: 14
       max_pages: 20
@@ -77,7 +77,7 @@ sources:
     keyword_filter: true
     phase: 1
     enabled: true
-    verified: false
+    verified: true
 
   # ─────────────────────────────── 교육청·학교
   - id: use_job_general

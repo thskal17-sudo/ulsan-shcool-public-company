@@ -3,6 +3,7 @@
 fixtures/mpm_list.xml 은 부산 수집 서버에서 받은 실제 응답(2026-10-12) 형식에 울산 공고를 넣은 것,
 alio_list.json 은 그 실제 응답에서 몇 건만 남긴 것.
 """
+import dataclasses
 from datetime import date
 
 import pytest
@@ -82,6 +83,16 @@ def test_mpm_pages_until_total(fixture_bytes, monkeypatch):
     http = _Http(xml, xml, xml, xml)
     MpmJobCollector(SOURCES["gojobs_list"], http, TODAY).collect()
     assert [c[1]["pageNo"] for c in http.calls] == [1, 2, 3]
+
+
+def test_mpm_reads_newest_pages_when_too_many(fixture_bytes, monkeypatch):
+    """전체 1000건(10쪽), max_pages 3 → 1쪽으로 건수를 알고 끝쪽 8·9·10쪽(새 글)을 읽는다."""
+    monkeypatch.setenv("G2B_API_KEY", "k")
+    xml = fixture_bytes("mpm_list.xml").replace(b"<totalCount>6</totalCount>", b"<totalCount>1000</totalCount>")
+    src = dataclasses.replace(SOURCES["gojobs_list"], options={"days": 14, "max_pages": 3})
+    http = _Http(xml)
+    MpmJobCollector(src, http, TODAY).collect()
+    assert [c[1]["pageNo"] for c in http.calls] == [1, 8, 9, 10]
 
 
 def test_mpm_api_error(fixture_bytes):

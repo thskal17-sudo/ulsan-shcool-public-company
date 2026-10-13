@@ -12,7 +12,8 @@
 해외 접속이 자주 막히고 기관명 검색 1쪽(10건)만 GET 으로 열리지만, 공공데이터포털은 막히지 않는다
 (부산 수집기에서 2026-10-12 확인).
 - 키워드(Kwrd)·정렬(Sort_order)은 무시되고 오래된 글부터 오므로, 등록일(Begin_de~End_de)로
-  최근 며칠만 받아 지역코드로 울산 공고를 고른다. 날짜 조건은 제대로 걸린다.
+  최근 며칠만 받아 지역코드로 울산 공고를 고른다. 날짜 조건은 제대로 걸린다. 전국 공고라 쪽 수가
+  많으면 끝쪽(새 글)부터 max_pages 쪽만 읽는다.
 - areacode 는 시군구 코드(울산 31110 중구 … 31710 울주군)이고 여러 곳이면 쉼표로 이어진다.
   00000(미지정)이면 기관명에 '울산'이 있을 때만 울산 공고로 본다.
 - idx 는 나라일터 상세 주소의 empmnsn 과 같아서, 게시판을 읽던 때 저장한 공고와 이어진다.
@@ -51,12 +52,19 @@ class MpmJobCollector(Collector):
             "End_de": self.today.isoformat(),
         }
         postings: list[Posting] = []
-        for page in range(1, max_pages + 1):
+        page, last = 1, 1
+        while page <= last:
             resp = datagokr.get(self.http, ENDPOINT, {**query, "pageNo": page}, key)
             items, total = parse_mpm_xml(resp.content)
             postings.extend(self._to_posting(i) for i in items if i.get("title") and in_area(i, prefix, area_name))
-            if not items or page * rows >= total:
+            if not items:
                 break
+            if page == 1:
+                # 오래된 글부터 오므로 쪽 수가 max_pages 를 넘으면 앞쪽(오래된 글)을 건너뛰고 끝쪽(새 글)을 읽는다
+                last = -(-total // rows)
+                page = max(2, last - max_pages + 1)
+            else:
+                page += 1
         return postings
 
     def _to_posting(self, item: dict[str, str]) -> Posting:
