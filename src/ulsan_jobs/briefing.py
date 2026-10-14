@@ -452,8 +452,11 @@ def push_upload(rows: list[dict], url: str, token: str, post=None) -> ImportResu
 
     post = post or requests.post
     result = ImportResult(sent=len(rows))
+    # 모든 줄에 같은 칸 이름을 넣어 보낸다 (빈 칸은 None). 엑셀에서 읽은 줄은 빈 칸이 아예 빠져 있어서,
+    # '보류' 줄(마감일 없음)만 모인 묶음을 그대로 보내면 사이트가 "마감일 칸이 없다"며 묶음 전체를 거절한다.
+    names = list(dict.fromkeys(k for r in rows for k in r))
     for start in range(0, len(rows), IMPORT_BATCH):
-        batch = [{k: _json_value(v) for k, v in r.items()} for r in rows[start:start + IMPORT_BATCH]]
+        batch = [{k: _json_value(r.get(k)) for k in names} for r in rows[start:start + IMPORT_BATCH]]
         try:
             resp = post(url, json={"rows": batch}, headers={"Authorization": f"Bearer {token}"}, timeout=60)
         except requests.exceptions.RequestException as exc:
