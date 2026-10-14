@@ -315,6 +315,24 @@ def test_push_upload_batches_and_sums(monkeypatch):
     assert (r.sent, r.created, r.skipped, r.failed, r.error) == (250, 248, 2, [("y", "마감")], "")
 
 
+def test_push_upload_sends_same_columns_in_every_batch():
+    """엑셀에서 읽은 '보류' 줄은 마감일 칸이 아예 없다. 묶음마다 칸 이름이 같아야 사이트가 묶음을 거절하지 않는다."""
+    from ulsan_jobs.briefing import push_upload
+
+    calls = []
+
+    def post(url, json, headers, timeout):
+        calls.append(json["rows"])
+        return _Resp(200, {"received": len(json["rows"]), "created": 0, "skipped": [], "failed": []})
+
+    rows = [{"제목": f"공고 {i}", "마감일": date(2026, 10, 15), "메모": "x"} for i in range(200)]
+    rows += [{"제목": f"보류 {i}", "처리": "보류"} for i in range(30)]  # 마감일 칸 없음 (2번째 묶음 전부)
+    r = push_upload(rows, "https://x", "t", post=post)
+    assert r.error == "" and [len(c) for c in calls] == [200, 30]
+    assert calls[1][0] == {"제목": "보류 0", "마감일": None, "메모": None, "처리": "보류"}
+    assert calls[0][0] == {"제목": "공고 0", "마감일": "2026-10-15", "메모": "x", "처리": None}
+
+
 def test_push_upload_reports_rejection_and_connection_error():
     import requests
 
