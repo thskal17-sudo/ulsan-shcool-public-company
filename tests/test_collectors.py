@@ -238,3 +238,52 @@ def test_link_in_data_attribute():
     # 옵션이 없으면 예전처럼 (목록 주소 + 제목 키) — 다른 게시판의 공고 번호가 바뀌지 않게
     plain = parse_board(html, base, {}, TODAY)
     assert plain[0].url == base and not plain[0].detail_ok
+
+
+def test_work24_api_replaces_cut_title_with_detail(monkeypatch):
+    """목록 제목이 '...'로 잘려 있으면 상세 API 의 전체 제목(wantedTitle)으로 바꾼다. 상세 실패면 그대로."""
+    from datetime import date
+
+    import requests
+
+    from ulsan_jobs.collectors.work24_api import DETAIL_ENDPOINT, Work24Collector, parse_work24_detail_title
+    from ulsan_jobs.config import Source
+
+    listing = (
+        "<wantedRoot><total>2</total>"
+        "<wanted><wantedAuthNo>K1</wantedAuthNo><company>월드요양보호사교육원</company>"
+        "<title>...강사 모집 (간호사면허)【경총 중장년내일센터 채용...</title><region>울산광역시 남구</region>"
+        "<regDt>26-10-15</regDt><closeDt>26-11-27</closeDt></wanted>"
+        "<wanted><wantedAuthNo>K2</wantedAuthNo><company>울산동부종합사회복지관</company>"
+        "<title>요가 강사...</title><region>울산광역시 동구</region><regDt>26-10-15</regDt><closeDt>26-10-30</closeDt></wanted>"
+        "</wantedRoot>"
+    ).encode()
+    detail = ("<wantedDtl><wantedInfo><wantedTitle>요양보호사 양성과정 강사 모집 (간호사면허)【경총 중장년내일센터 채용대행】"
+              "</wantedTitle></wantedInfo></wantedDtl>").encode()
+
+    class Resp:
+        def __init__(self, content):
+            self.content = content
+
+    class Http:
+        def __init__(self):
+            self.calls = []
+
+        def get(self, url, params=None, **kw):
+            self.calls.append((url, dict(params or {})))
+            if url == DETAIL_ENDPOINT:
+                if params["wantedAuthNo"] == "K2":
+                    raise requests.exceptions.ConnectionError("boom")
+                return Resp(detail)
+            return Resp(listing)
+
+    monkeypatch.setenv("WORK24_API_KEY", "k")
+    src = Source(id="work24_api", name="고용24", collector="work24_api", auth_env="WORK24_API_KEY",
+                 params={"region": "31000", "keyword": "강사"})
+    http = Http()
+    posts = Work24Collector(src, http, date(2026, 10, 16)).collect()
+    assert posts[0].title == "요양보호사 양성과정 강사 모집 (간호사면허)【경총 중장년내일센터 채용대행】"
+    assert posts[1].title == "요가 강사..."  # 상세를 못 읽으면 목록 제목
+    detail_calls = [p for u, p in http.calls if u == DETAIL_ENDPOINT]
+    assert detail_calls[0]["callTp"] == "D" and detail_calls[0]["infoSvc"] == "VALIDATION"
+    assert parse_work24_detail_title(b"<wantedDtl><wantedTitle>abc...</wantedTitle></wantedDtl>") == ""
