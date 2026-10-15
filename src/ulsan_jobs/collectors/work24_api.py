@@ -6,6 +6,10 @@
       <wantedInfoUrl/>...</wanted>...</wantedRoot>
 
 고용24에는 민간 학원 강사 공고가 매우 많으므로, 기관명이 공공기관 패턴에 맞는 공고만 남긴다.
+
+목록의 제목은 길면 앞부분이 '...'로 잘려 온다('...강사 모집 (간호사면허)【경총 …'). 잘린 제목만 같은 인증키로
+상세 API(callOpenApiSvcInfo210D01.do?callTp=D&wantedAuthNo=…&infoSvc=VALIDATION)를 불러 전체 제목
+(wantedTitle)으로 바꾼다. 상세를 못 읽으면 목록 제목을 그대로 쓴다.
 """
 from __future__ import annotations
 
@@ -13,12 +17,16 @@ import os
 import re
 import xml.etree.ElementTree as ET
 
+import requests
+
 from ..classify import infer_district, infer_org_type
 from ..dates import find_all_dates, parse_date
 from ..models import Posting
 from .base import Collector, NotConfigured
 
 ENDPOINT = "https://www.work24.go.kr/cm/openApi/call/wk/callOpenApiSvcInfo210L01.do"
+DETAIL_ENDPOINT = "https://www.work24.go.kr/cm/openApi/call/wk/callOpenApiSvcInfo210D01.do"
+_CUT = re.compile(r"\.\.\.|…")
 
 DEFAULT_ORG_INCLUDE = (
     r"학교|교육청|교육지원청|교육원|공단|공사|재단|구청|군청|시청|행정복지센터|주민센터|복지관|도서관|수련관|"
@@ -58,10 +66,23 @@ class Work24Collector(Collector):
                 company = item.get("company", "")
                 if not include.search(company) or exclude.search(company):
                     continue
+                if _CUT.search(item.get("title", "")):
+                    item["title"] = self._full_title(auth_key, item.get("wantedAuthNo", "")) or item["title"]
                 postings.append(self._to_posting(item))
             if page * display >= total or not items:
                 break
         return postings
+
+    def _full_title(self, auth_key: str, wanted_no: str) -> str:
+        """상세 API 의 전체 제목. 못 읽으면 빈 문자열 (목록 제목을 그대로 쓴다)."""
+        if not wanted_no:
+            return ""
+        query = {"authKey": auth_key, "callTp": "D", "returnType": "XML", "wantedAuthNo": wanted_no,
+                 "infoSvc": "VALIDATION"}
+        try:
+            return parse_work24_detail_title(self.http.get(DETAIL_ENDPOINT, params=query).content)
+        except (requests.RequestException, ET.ParseError):
+            return ""
 
     def _to_posting(self, item: dict[str, str]) -> Posting:
         company = item.get("company", "")
@@ -93,3 +114,10 @@ def parse_work24_xml(content: bytes) -> tuple[list[dict[str, str]], int]:
     for wanted in root.iter("wanted"):
         items.append({child.tag: (child.text or "").strip() for child in wanted})
     return items, total
+
+
+def parse_work24_detail_title(content: bytes) -> str:
+    """상세 API 응답의 구인 제목 (wantedTitle). 없거나 이것도 잘려 있으면 빈 문자열."""
+    root = ET.fromstring(content)
+    title = re.sub(r"\s+", " ", root.findtext(".//wantedTitle") or "").strip()
+    return "" if not title or _CUT.search(title) else title
