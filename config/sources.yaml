@@ -133,6 +133,20 @@ sources:
     phase: 1
     enabled: true
     verified: true
+  - id: uskids_notice
+    name: 울산광역시유아교육진흥원 - 공지사항
+    org_type: 교육청·학교
+    district: 울산전체
+    collector: use_cms
+    url: https://use.go.kr/uskids/user/bbs/BD_selectBbsList.do?q_bbsSn=1152
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: q_bbsDocNo
+      org_name: 울산광역시유아교육진흥원
   # ─────────────────────────────── 지자체 (시청·구군청)
   # 구·군청 채용공고는 전국 공통 새올 시스템 목록을 직접 GET 으로 읽는다
   # (목록 페이지 OfrNotAncmtLSub.jsp 는 스크립트로 이 주소를 부르는 빈 껍데기)
@@ -238,6 +252,36 @@ sources:
       key_param: notAncmtMgtNo
       org_name: 울산 울주군청
 
+  - id: donggu_notice
+    name: 동구청 알림사항 (동구국민체육센터·전하체육센터 등 구 직영 체육시설 공고)
+    org_type: 지자체
+    district: 동구
+    collector: generic_board
+    url: https://www.donggu.ulsan.kr/cop/bbs/selectBoardList.do?bbsId=BBSMSTR_000000000323
+    pages: 1  # 쪽 이동이 POST(fn_egov_select_noticeList). 한 쪽 10건이 2~3일치
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      key_param: nttId
+      org_name: 울산 동구청
+  - id: ulju_notice
+    name: 울주군청 알림사항
+    org_type: 지자체
+    district: 울주군
+    collector: generic_board
+    url: https://www.ulju.ulsan.kr/ulju/bbs/list.do?ptIdx=145&mId=0404010000
+    pages: 1  # 쪽 이동이 POST(goPage)
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      # 제목 링크는 href="#" + goTo.view('list','70169','145','0404010000'), 제목은 '…'로 잘리고 title 속성에 전체 제목
+      link_template: "https://www.ulju.ulsan.kr/ulju/bbs/view.do?mId={3}&bIdx={1}&ptIdx={2}"
+      key_param: bIdx
+      org_name: 울산 울주군청
   - id: ulsan_city_exam
     name: 울산시청 시험공고
     org_type: 지자체
@@ -599,6 +643,51 @@ sources:
     enabled: false  # 목록이 표가 아니라 글마다 POST 폼 + 대부분 수강생 모집 글 → 넣지 않음
     verified: false
 
+  - id: donggu_library
+    name: 동구 통합도서관 - 공지사항
+    org_type: 평생교육·도서관
+    district: 동구
+    collector: generic_board
+    url: https://library.donggu.ulsan.kr/main/contents.do?a_num=45316290
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: b_num  # 북구 구립도서관과 같은 도서관 누리집
+      org_name: 울산동구통합도서관
+  - id: usnl_notice
+    name: 울산남부도서관(교육청) - 공지사항
+    org_type: 평생교육·도서관
+    district: 남구
+    collector: generic_board
+    url: https://usnl.or.kr/cop/bbs/selectBoardList.do?bbsId=BBSMSTR_000000000004&menuNo=6010000
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      # 제목 링크 fn_egov_inqire_notice('8947', 'BBSMSTR_000000000004') → 상세는 GET 으로도 열림
+      link_template: "https://usnl.or.kr/cop/bbs/selectBoardArticle.do?bbsId={1}&nttId={0}&menuNo=6010000"
+      key_param: nttId
+      org_name: 울산남부도서관
+  - id: usdl_notice
+    name: 울산동부도서관(교육청) - 공지사항
+    org_type: 평생교육·도서관
+    district: 동구
+    collector: generic_board
+    url: http://usdl.or.kr/cop/bbs/selectBoardList.do?bbsId=BBSMSTR_000000000004&menuNo=6010000
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      link_template: "http://usdl.or.kr/cop/bbs/selectBoardArticle.do?bbsId={1}&nttId={0}&menuNo=6010000"
+      key_param: nttId
+      org_name: 울산동부도서관
   - id: junggu_library
     name: 중구 구립도서관 - 공지사항
     org_type: 평생교육·도서관
@@ -615,6 +704,20 @@ sources:
       org_name: 울산중구구립도서관
 
   # ─────────────────────────────── 문화시설 (문화예술회관·문화원·박물관·문화재단)
+  - id: ulsansenior_notice
+    name: 울산광역시노인복지관 - 알립니다
+    org_type: 복지관
+    district: 울산전체
+    collector: generic_board
+    url: https://www.ulsansenior.org/bbs/board.php?bo_table=notice
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: wr_id  # 그누보드
+      org_name: 울산광역시노인복지관
   - id: ucac_notice
     name: 울산문화예술회관 - 공지사항
     org_type: 문화시설

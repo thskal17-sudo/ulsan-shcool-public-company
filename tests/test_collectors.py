@@ -287,3 +287,20 @@ def test_work24_api_replaces_cut_title_with_detail(monkeypatch):
     detail_calls = [p for u, p in http.calls if u == DETAIL_ENDPOINT]
     assert detail_calls[0]["callTp"] == "D" and detail_calls[0]["infoSvc"] == "VALIDATION"
     assert parse_work24_detail_title(b"<wantedDtl><wantedTitle>abc...</wantedTitle></wantedDtl>") == ""
+
+
+def test_board_uses_title_attr_when_link_text_is_cut():
+    """울주군청 알림사항: 링크 글자는 '…덕신온...' 으로 잘리고 title 속성에 전체 제목, 상세는 goTo.view(…) onclick."""
+    from datetime import date
+
+    from ulsan_jobs.collectors.board import parse_board
+
+    html = """<table><thead><tr><th>번호</th><th>제목</th><th>작성자</th><th>작성일</th></tr></thead><tbody>
+    <tr><td>1</td><td><a href="#" onclick="goTo.view('list','70169','145','0404010000'); return false;"
+      title="온산 락(樂) 페스타 WITH 덕신온마켓 키즈&amp;플리마켓 셀러 모집 안내">온산 락(樂) 페스타 WITH 덕신온...</a></td>
+      <td>박**</td><td>2026-10-22</td></tr></tbody></table>"""
+    opts = {"link_template": "https://www.ulju.ulsan.kr/ulju/bbs/view.do?mId={3}&bIdx={1}&ptIdx={2}", "key_param": "bIdx"}
+    rows = parse_board(html.encode(), "https://www.ulju.ulsan.kr/ulju/bbs/list.do?ptIdx=145&mId=0404010000", opts, date(2026, 10, 24))
+    assert rows[0].title == "온산 락(樂) 페스타 WITH 덕신온마켓 키즈&플리마켓 셀러 모집 안내"
+    assert rows[0].url == "https://www.ulju.ulsan.kr/ulju/bbs/view.do?mId=0404010000&bIdx=70169&ptIdx=145"
+    assert rows[0].key == "70169" and rows[0].detail_ok

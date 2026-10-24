@@ -65,3 +65,12 @@ def test_infer_org_type_and_district():
     assert infer_org_type("무엇", "기본") == "기본"
     assert infer_district("울산광역시 동구") == "동구"
     assert infer_district("울산광역시", "울산전체") == "울산전체"
+
+
+def test_squashed_words_are_not_instructor(rules):
+    """공백을 지우면 '강사'가 생기는 낱말은 강사 공고가 아니다 (노인복지관 '기능보강사업' 공지)."""
+    from ulsan_jobs.classify import judge
+
+    assert judge("울산광역시노인복지관 기능보강사업 수의계약 내역 및 공사일정 공지", rules, True) is None
+    assert judge("2026년 건강사업 안내", rules, True) is None
+    assert judge("건강사업 운동 강사 모집", rules, True) == "모집중"

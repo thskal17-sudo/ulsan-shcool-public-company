@@ -10,6 +10,10 @@ def _squash(text: str) -> str:
     return re.sub(r"\s+", "", text or "")
 
 
+# 공백을 지우면 '강사'가 생기는 낱말 ('기능보강사업' → 보[강사]업, '건강사업' → 건[강사]업). 포함 키워드를 찾기 전에 뺀다
+_FALSE_HITS = re.compile(r"(보|건)\s*강\s*사\s*업|건\s*강\s*사\s*랑")
+
+
 def _has_any(text: str, terms: list[str]) -> str | None:
     t = _squash(text)
     for term in terms:
@@ -30,7 +34,7 @@ def judge(
     keep = rules.keep_result_notices if keep_results is None else keep_results
     if _has_any(title, rules.exclude):
         return None
-    if keyword_filter and not _has_any(f"{title} {label}", rules.include):
+    if keyword_filter and not _has_any(_FALSE_HITS.sub(" ", f"{title} {label}"), rules.include):
         return None
     if _has_any(title, rules.result_notice):
         return "결과공고" if keep else None
@@ -55,6 +59,7 @@ _ORG_TYPES = [
     ("공단(체육시설)", r"공단|체육회|체육센터|스포츠센터|수영장"),
     ("여성·가족", r"여성|새일|가족"),
     ("청소년", r"청소년"),
+    ("복지관", r"복지관"),
     ("문화시설", r"문화예술회관|문화의전당|문화원|문화재단|문화관광재단|박물관|미술관"),
     ("평생교육·도서관", r"도서관|평생|문화의집"),
     ("지자체", r"구청|군청|시청|행정복지센터|주민센터|보건소|울산광역시"),

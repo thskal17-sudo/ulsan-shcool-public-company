@@ -276,8 +276,10 @@ def parse_board(html: bytes | str, base_url: str, opts: dict, today: date) -> li
             key, detail_ok = (values[0] if values else url), True
         elif anchor is not None:
             title = _clean(anchor.get_text())
-            if len(title) < 2:
-                title = _clean(anchor.get("title"))
+            full = _clean(anchor.get("title"))
+            if len(title) < 2 or (re.search(r"(\.\.\.|…)$", title) and len(full) > len(title)):
+                # 링크 글자가 비었거나 '온산 락(樂) 페스타 WITH 덕신온...' 처럼 잘렸으면 title 속성의 전체 제목 (울주군청 알림사항)
+                title = full or title
             if len(title) < 2:
                 # <a href="…"/>제목</a> 처럼 링크가 비고 제목은 칸에만 있는 경우 (잡알리오)
                 title = _clean((title_td or anchor.parent).get_text(" "))
