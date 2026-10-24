@@ -237,3 +237,40 @@ def test_closed_notices_are_not_mailed_later(tmp_path):
     out = run_camp(db_path=db, send_mail=False, config_dir=ROOT / "config",
                    now=datetime(2026, 10, 20, 7, 30, tzinfo=KST), client=FakeClient([]))
     assert out.new == []  # 마감일을 모르는 공고도 오래되면 뺀다
+
+
+def test_g2b_connect_failure_retries_then_keeps_going(tmp_path):
+    """나라장터 연결 실패는 잠시 기다렸다 다시 시도하고, 끝내 안 되면 나라장터만 실패로 남기고 계속한다."""
+    import requests
+
+    from ulsan_jobs.camp import RETRY_WAITS, G2BClient
+
+    class Resp:
+        content = json.dumps({"response": {"header": {"resultCode": "00"}, "body": {"items": [], "totalCount": 0}}}).encode()
+
+    class FlakyHttp:
+        def __init__(self, fails):
+            self.fails = fails
+            self.calls = 0
+
+        def get(self, url, params=None, **kw):
+            self.calls += 1
+            if self.calls <= self.fails:
+                raise requests.exceptions.ConnectTimeout("timed out ServiceKey=SECRET")
+            return Resp()
+
+    waits = []
+    http = FlakyHttp(fails=2)
+    client = G2BClient(http, "SECRET", sleep=waits.append)
+    assert client.list_services(NOW.replace(tzinfo=None), NOW.replace(tzinfo=None)) == []
+    assert http.calls == 3 and waits == list(RETRY_WAITS)
+
+    class DownClient(FakeClient):
+        def list_services(self, begin, end):
+            raise requests.exceptions.ConnectTimeout("timed out ServiceKey=SECRET")
+
+    out = run_camp(db_path=tmp_path / "p.db", send_mail=False, config_dir=ROOT / "config", now=NOW,
+                   client=DownClient([]))
+    assert any("나라장터: 접속 실패 (ConnectTimeout)" in e for e in out.errors)
+    assert not any("SECRET" in e for e in out.errors)
+    assert len(out.errors) == 1  # S2B 는 그대로 돌아서 작업이 멈추지 않는다

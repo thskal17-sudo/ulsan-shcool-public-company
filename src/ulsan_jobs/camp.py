@@ -27,6 +27,7 @@ import logging
 import os
 import re
 import sqlite3
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -34,6 +35,7 @@ from html import escape
 from pathlib import Path
 from urllib.parse import unquote
 
+import requests
 import yaml
 
 from .config import DEFAULT_CONFIG_DIR
@@ -267,16 +269,31 @@ def _xml_error(text: str) -> str:
     return msg or text[:200]
 
 
+# 공공데이터포털(apis.data.go.kr)은 해외(GitHub Actions) 서버에서 가끔 연결 자체가 안 된다
+# (10/15 08:18, 10/17 07:53 ConnectTimeout → 작업 전체가 멈춤). 접속 실패는 잠시 기다렸다가 다시 시도한다.
+RETRY_WAITS = (20, 60)
+
+
 class G2BClient:
-    def __init__(self, http: Http, key: str):
+    def __init__(self, http: Http, key: str, sleep=time.sleep):
         self.http = http
         self.key = key
+        self.sleep = sleep
         self.calls = 0
         self.region_samples: list[dict] = []  # 진단용: 참가가능지역 응답 몇 건을 DB 에 남긴다
 
-    def _get(self, op: str, params: dict) -> tuple[list[dict], int]:
+    def _get(self, op: str, params: dict, retry: bool = False) -> tuple[list[dict], int]:
+        """retry: 접속 실패면 RETRY_WAITS 만큼 기다렸다 다시 시도 (목록 조회만. 공고별 지역 조회는 한 번)."""
         query = {"ServiceKey": self.key, "type": "json", **params}
-        resp = self.http.get(f"{BASE}/{op}", params=query)
+        for wait in (*(RETRY_WAITS if retry else ()), None):
+            try:
+                resp = self.http.get(f"{BASE}/{op}", params=query)
+                break
+            except (requests.ConnectionError, requests.Timeout) as exc:
+                if wait is None:
+                    raise
+                log.warning("나라장터 접속 실패 (%s), %d초 뒤 다시 시도", type(exc).__name__, wait)
+                self.sleep(wait)
         self.calls += 1
         return parse_response(resp.content)
 
@@ -292,6 +309,7 @@ class G2BClient:
                     "numOfRows": ROWS,
                     "pageNo": page,
                 },
+                retry=True,
             )
             rows += items
             if not items or page * ROWS >= total:
@@ -583,6 +601,10 @@ def run_camp(
         except G2BError as exc:
             log.error("나라장터 수집 실패: %s", exc)
             out.errors.append(f"나라장터: {exc}")
+        except (requests.ConnectionError, requests.Timeout) as exc:
+            # 오류 문구에는 인증키가 든 요청 주소가 있어서 메일·기록에는 종류만 남긴다
+            log.error("나라장터 접속 실패: %s", type(exc).__name__)
+            out.errors.append(f"나라장터: 접속 실패 ({type(exc).__name__}) — 다음 실행에서 다시 받습니다")
         store.commit()
         if cfg.s2b.get("enabled"):
             from . import s2b
