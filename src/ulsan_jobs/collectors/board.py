@@ -8,6 +8,8 @@ options (모두 선택)
     row_selector    행 CSS 셀렉터 (자동 판별이 틀릴 때만)
     link_template   제목 링크가 javascript 일 때 onclick 인자로 상세 주소를 만드는 틀 ({0}, {1} …)
     link_attr       상세 주소가 href 대신 이 속성에 있을 때 (예: data-action — 울주군청 채용공고의 req.post(this))
+    key_attr        상세가 POST 로만 열려 주소를 만들 수 없을 때 게시글 번호를 읽을 링크 속성 (예: data-idx — 울주도서관).
+                    주소는 목록 페이지로 두고 번호만 식별값으로 쓴다
     key_param       상세 주소에서 게시글 번호로 쓸 쿼리 파라미터 (예: q_bbsDocNo)
     form_link       true 면 onclick 으로 제출하는 <form> 의 action + hidden 값으로 상세 주소를 만든다
     detail_get      상세 페이지를 GET 으로 열 수 있으면 true (마감일 추출에 사용, 기본 true)
@@ -284,6 +286,8 @@ def parse_board(html: bytes | str, base_url: str, opts: dict, today: date) -> li
                 # <a href="…"/>제목</a> 처럼 링크가 비고 제목은 칸에만 있는 경우 (잡알리오)
                 title = _clean((title_td or anchor.parent).get_text(" "))
             url, key, detail_ok = _resolve_link(soup, anchor, tr, base_url, opts)
+            if opts.get("key_attr") and anchor.get(opts["key_attr"]):
+                key = anchor[opts["key_attr"]].strip()
         else:
             continue
         title = re.sub(r"\s*(새글|NEW|new|첨부파일|파일첨부)$", "", title)

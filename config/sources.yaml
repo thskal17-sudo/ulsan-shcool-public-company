@@ -147,6 +147,20 @@ sources:
     options:
       key_param: q_bbsDocNo
       org_name: 울산광역시유아교육진흥원
+  - id: usm_notice
+    name: 울산과학관 - 공지사항
+    org_type: 교육청·학교
+    district: 남구
+    collector: use_cms
+    url: https://use.go.kr/usm/user/bbs/BD_selectBbsList.do?q_bbsSn=1483
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: q_bbsDocNo
+      org_name: 울산과학관
   # ─────────────────────────────── 지자체 (시청·구군청)
   # 구·군청 채용공고는 전국 공통 새올 시스템 목록을 직접 GET 으로 읽는다
   # (목록 페이지 OfrNotAncmtLSub.jsp 는 스크립트로 이 주소를 부르는 빈 껍데기)
@@ -688,6 +702,38 @@ sources:
       link_template: "http://usdl.or.kr/cop/bbs/selectBoardArticle.do?bbsId={1}&nttId={0}&menuNo=6010000"
       key_param: nttId
       org_name: 울산동부도서관
+  - id: usul_notice
+    name: 울주도서관(교육청) - 공지사항
+    org_type: 평생교육·도서관
+    district: 울주군
+    collector: generic_board
+    url: https://www.usul.or.kr/board/notice.do
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      # 제목 링크 <a href="javascript:;" data-idx="14861"> → 상세는 폼 POST(action=view, idx)로만 열린다.
+      # 주소는 목록으로 두고 글번호만 식별값으로 쓴다
+      key_attr: data-idx
+      detail_get: false
+      org_name: 울주도서관
+  - id: usul_edunotice
+    name: 울주도서관(교육청) - 평생교육 공지
+    org_type: 평생교육·도서관
+    district: 울주군
+    collector: generic_board
+    url: https://www.usul.or.kr/board/edunotice.do
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_attr: data-idx
+      detail_get: false
+      org_name: 울주도서관
   - id: junggu_library
     name: 중구 구립도서관 - 공지사항
     org_type: 평생교육·도서관

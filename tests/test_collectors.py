@@ -304,3 +304,17 @@ def test_board_uses_title_attr_when_link_text_is_cut():
     assert rows[0].title == "온산 락(樂) 페스타 WITH 덕신온마켓 키즈&플리마켓 셀러 모집 안내"
     assert rows[0].url == "https://www.ulju.ulsan.kr/ulju/bbs/view.do?mId=0404010000&bIdx=70169&ptIdx=145"
     assert rows[0].key == "70169" and rows[0].detail_ok
+
+
+def test_board_key_attr_for_post_only_detail():
+    """울주도서관: <a href="javascript:;" data-type="view" data-idx="14861"> → 상세는 POST 라 주소는 목록, 번호만 식별값."""
+    from datetime import date
+
+    from ulsan_jobs.collectors.board import parse_board
+
+    html = """<table><thead><tr><th>번호</th><th>제목</th><th>작성자</th><th>작성일</th></tr></thead><tbody>
+    <tr><td>1</td><td class="subject"><a href="javascript:;" data-type="view" data-idx="14861">평생교육 프로그램 강사 모집</a></td>
+      <td>관리자</td><td>2026-10-07</td></tr></tbody></table>"""
+    rows = parse_board(html.encode(), "https://www.usul.or.kr/board/notice.do", {"key_attr": "data-idx"}, date(2026, 10, 26))
+    assert rows[0].key == "14861"
+    assert rows[0].url == "https://www.usul.or.kr/board/notice.do" and not rows[0].detail_ok
