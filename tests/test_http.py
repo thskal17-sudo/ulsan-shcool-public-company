@@ -83,3 +83,51 @@ def test_connect_wait_is_bounded(http):
     assert calls[0][1] == (10.0, 20.0)
     retry = client.session.get_adapter("https://up.example/").max_retries
     assert retry.connect == 1
+
+
+def test_kr_proxy_routes_korean_sites_and_falls_back(monkeypatch):
+    """KR_PROXY_URL 이 있으면 .kr 사이트만 중계로 보내고, 중계로 안 닿으면 그 사이트만 바로 접속한다."""
+    monkeypatch.setenv("KR_PROXY_URL", "http://u:p@1.2.3.4:8888")
+    client = Http(min_interval=0)
+    calls = []
+
+    def fake_request(method, url, **kwargs):
+        proxied = "proxies" in kwargs
+        calls.append((url, proxied))
+        if proxied and "blocked.kr" in url:
+            raise requests.exceptions.ProxyError("Tunnel connection failed: 502 Bad Gateway")
+        return _Resp()
+
+    monkeypatch.setattr(client.session, "request", fake_request)
+    client.get("https://www.ulsan.go.kr/a")
+    client.get("https://api.github.com/b")
+    client.get("https://blocked.kr/c")
+    client.get("https://blocked.kr/d")
+    assert calls == [
+        ("https://www.ulsan.go.kr/a", True),
+        ("https://api.github.com/b", False),  # 한국 사이트가 아니면 중계하지 않는다
+        ("https://blocked.kr/c", True),
+        ("https://blocked.kr/c", False),  # 중계 실패 → 바로 접속
+        ("https://blocked.kr/d", False),  # 같은 실행에서는 그 사이트를 바로 접속
+    ]
+
+
+def test_kr_proxy_down_disables_proxy_for_run(monkeypatch):
+    client = Http(min_interval=0, kr_proxy="http://u:p@1.2.3.4:8888")
+    calls = []
+
+    def fake_request(method, url, **kwargs):
+        calls.append("proxies" in kwargs)
+        if "proxies" in kwargs:
+            raise requests.exceptions.ProxyError("Unable to connect to proxy")
+        return _Resp()
+
+    monkeypatch.setattr(client.session, "request", fake_request)
+    client.get("https://a.go.kr/1")
+    client.get("https://b.or.kr/2")
+    assert calls == [True, False, False] and client.kr_proxy is None
+
+
+def test_no_proxy_without_env(monkeypatch):
+    monkeypatch.delenv("KR_PROXY_URL", raising=False)
+    assert Http(min_interval=0).kr_proxy is None

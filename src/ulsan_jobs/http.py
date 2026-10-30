@@ -12,10 +12,16 @@ Access) 항목에서 중간 인증서를 내려받아 신뢰 목록(certifi)에 
 접속 자체가 안 되는 서버(해외 접속 차단·장애)는 기다리는 시간이 전체 실행 시간을 잡아먹는다.
 연결 대기는 10초씩 두 번까지만 하고, 한 번 접속에 실패한 서버는 같은 실행 안에서 다시 기다리지
 않고 바로 실패시킨다 (같은 서버의 다른 게시판들). 실행 끝의 재시도 전에 forget_unreachable() 로 잊는다.
+
+국내 중계 서버: 환경변수 KR_PROXY_URL(http://아이디:비밀번호@IP:포트, 네이버 클라우드의 tinyproxy)이 있으면
+한국 사이트(.kr)는 그 중계를 거쳐 접속한다. 해외(GitHub Actions) 접속을 막거나 끊는 사이트를 한국 IP 로 읽기 위함.
+- 중계를 거쳐도 그 사이트에 닿지 않으면(Tunnel connection failed) 이번 실행에서는 그 사이트만 바로 접속한다.
+- 중계 서버 자체에 닿지 않으면(Unable to connect to proxy) 이번 실행 동안 중계를 끄고 모두 바로 접속한다.
 """
 from __future__ import annotations
 
 import logging
+import os
 import socket
 import ssl
 import tempfile
@@ -53,6 +59,7 @@ class Http:
         max_bytes: int = 10_000_000,
         connect_timeout: float = 10.0,
         connect_retries: int = 1,
+        kr_proxy: str | None = None,
     ):
         self.min_interval = min_interval
         self.timeout = timeout
@@ -76,6 +83,8 @@ class Http:
         self._ca_bundles: dict[str, str] = {}
         self._unreachable: set[str] = set()
         self._lock = threading.Lock()
+        self.kr_proxy = (kr_proxy if kr_proxy is not None else os.environ.get("KR_PROXY_URL", "")).strip() or None
+        self._direct_hosts: set[str] = set()  # 중계로 닿지 않아 바로 접속하는 사이트
 
     def allow_legacy_tls(self, host: str) -> None:
         """이 호스트에만 구형 TLS 설정(짧은 DH 키·구형 암호군·TLS 1.0/1.1)을 허용한다."""
@@ -101,7 +110,7 @@ class Http:
         if host in self._ca_bundles:
             kwargs.setdefault("verify", self._ca_bundles[host])
         try:
-            resp = self.session.request(method, url, **kwargs)
+            resp = self._send(method, url, host, kwargs)
         except requests.exceptions.SSLError as exc:
             if host in self._ca_bundles or "verify" in kwargs or not _is_chain_error(exc):
                 raise
@@ -109,7 +118,7 @@ class Http:
             if not bundle:
                 raise
             kwargs["verify"] = bundle
-            resp = self.session.request(method, url, **kwargs)
+            resp = self._send(method, url, host, kwargs)
         except requests.exceptions.ConnectionError as exc:
             if is_connect_failure(exc):
                 self._unreachable.add(host)
@@ -117,6 +126,22 @@ class Http:
         self._read_body(resp)
         resp.raise_for_status()
         return resp
+
+    def _send(self, method: str, url: str, host: str, kwargs: dict) -> requests.Response:
+        """한국 사이트는 국내 중계(KR_PROXY_URL)를 거쳐 보내고, 중계가 안 되면 바로 보낸다."""
+        if not self.kr_proxy or not host.endswith(".kr") or host in self._direct_hosts or "proxies" in kwargs:
+            return self.session.request(method, url, **kwargs)
+        try:
+            return self.session.request(method, url, proxies={"http": self.kr_proxy, "https": self.kr_proxy}, **kwargs)
+        except requests.exceptions.ProxyError as exc:
+            # 오류 문구에는 중계 주소(아이디·비밀번호)가 들어갈 수 있어 종류만 남긴다
+            if "Unable to connect to proxy" in str(exc):
+                log.warning("국내 중계 서버에 닿지 않아 이번 실행은 중계 없이 접속")
+                self.kr_proxy = None
+            else:
+                log.warning("중계로 %s 에 닿지 않아 바로 접속", host)
+                self._direct_hosts.add(host)
+            return self.session.request(method, url, **kwargs)
 
     def _read_body(self, resp: requests.Response) -> None:
         """본문을 시간·크기 제한 안에서 읽는다 (requests 의 timeout 은 바이트 사이 간격만 본다)."""

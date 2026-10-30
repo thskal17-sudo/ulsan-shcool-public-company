@@ -34,6 +34,7 @@ jobs:
         run: set -f; python scripts/probe.py $PROBE_ARGS
         env:
           PYTHONUNBUFFERED: "1"
+          KR_PROXY_URL: ${{ secrets.KR_PROXY_URL }}  # 국내 중계 서버. 없으면 바로 접속
           PROBE_ARGS: ${{ github.event.inputs.args }}
       - if: github.event.inputs.check != ''
         run: python -m ulsan_jobs check-source $CHECK_IDS
@@ -42,4 +43,5 @@ jobs:
           PYTHONUNBUFFERED: "1"
           CHECK_IDS: ${{ github.event.inputs.check }}
           G2B_API_KEY: ${{ secrets.G2B_API_KEY }}  # cleaneye_api·나라일터·잡알리오 시험용 (공공데이터포털 개인 인증키)
+          KR_PROXY_URL: ${{ secrets.KR_PROXY_URL }}  # 국내 중계 서버(네이버 클라우드). 없으면 바로 접속
           WORK24_API_KEY: ${{ secrets.WORK24_API_KEY }}  # work24_api 시험용
