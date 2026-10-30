@@ -53,6 +53,7 @@ jobs:
           MAIL_TO: ${{ secrets.MAIL_TO }}
           WORK24_API_KEY: ${{ secrets.WORK24_API_KEY }}
           G2B_API_KEY: ${{ secrets.G2B_API_KEY }}
+          KR_PROXY_URL: ${{ secrets.KR_PROXY_URL }}  # 국내 중계 서버(네이버 클라우드). 없으면 바로 접속
           SEND_MAIL: ${{ github.event_name == 'schedule' || inputs.send_mail }}
           EVENT: ${{ github.event_name }}
         run: |
@@ -110,6 +111,7 @@ jobs:
           MAIL_TO: ${{ secrets.MAIL_TO }}
           WORK24_API_KEY: ${{ secrets.WORK24_API_KEY }}
           G2B_API_KEY: ${{ secrets.G2B_API_KEY }}
+          KR_PROXY_URL: ${{ secrets.KR_PROXY_URL }}  # 국내 중계 서버(네이버 클라우드). 없으면 바로 접속
           SEND_MAIL: ${{ github.event_name == 'schedule' || inputs.send_mail }}
           RETRY_SOURCES: ${{ needs.collect.outputs.retry_sources }}
         run: |

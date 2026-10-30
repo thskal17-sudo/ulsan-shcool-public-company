@@ -472,15 +472,17 @@ sources:
       org_name: 울주군시설관리공단
 
   - id: namgu_uncmc_home
-    name: 울산남구도시관리공단 홈페이지
+    name: 울산남구도시관리공단 - 채용공고
     org_type: 공단(체육시설)
     district: 남구
     collector: generic_board
-    url: https://www.uncmc.or.kr/index.ulsan
+    url: https://www.uncmc.or.kr/portal/board/list.ulsan?boardId=BBS_0000003&menuCd=DOM_000000102003000000&contentsSid=35
     keyword_filter: true
     phase: 2
-    enabled: false  # 웹방화벽이 해외 서버 접속을 차단. 공고는 남구청 산하기관 채용정보(namgu_affiliated)로 일부 수집
+    enabled: true  # 웹방화벽이 해외 서버 접속을 차단 → 국내 중계 서버(KR_PROXY_URL)로 접속 (2026-10-30 확인)
     verified: true
+    options:
+      key_param: dataSid  # 상세 주소의 startPage 는 목록 쪽마다 달라서 글번호만 쓴다
 
   # 동구는 시설관리공단이 없음 (체육시설 직영·위탁)
 
