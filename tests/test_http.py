@@ -95,7 +95,10 @@ def test_kr_proxy_routes_korean_sites_and_falls_back(monkeypatch):
         proxied = "proxies" in kwargs
         calls.append((url, proxied))
         if proxied and "blocked.kr" in url:
-            raise requests.exceptions.ProxyError("Tunnel connection failed: 502 Bad Gateway")
+            # 실제 requests 오류 문구 형태 (urllib3 가 Tunnel 실패를 감싼다)
+            raise requests.exceptions.ProxyError(
+                "Max retries exceeded (Caused by ProxyError('Unable to connect to proxy', "
+                "OSError('Tunnel connection failed: 403 Forbidden')))")
         return _Resp()
 
     monkeypatch.setattr(client.session, "request", fake_request)
@@ -131,3 +134,21 @@ def test_kr_proxy_down_disables_proxy_for_run(monkeypatch):
 def test_no_proxy_without_env(monkeypatch):
     monkeypatch.delenv("KR_PROXY_URL", raising=False)
     assert Http(min_interval=0).kr_proxy is None
+
+
+def test_kr_proxy_auth_failure_disables_proxy_for_run():
+    client = Http(min_interval=0, kr_proxy="http://u:p@1.2.3.4:8888")
+    calls = []
+
+    def fake_request(method, url, **kwargs):
+        calls.append("proxies" in kwargs)
+        if "proxies" in kwargs:
+            raise requests.exceptions.ProxyError(
+                "Caused by ProxyError('Unable to connect to proxy', "
+                "OSError('Tunnel connection failed: 407 Proxy Authentication Required'))")
+        return _Resp()
+
+    client.session.request = fake_request
+    client.get("https://a.go.kr/1")
+    client.get("https://b.or.kr/2")
+    assert calls == [True, False, False] and client.kr_proxy is None

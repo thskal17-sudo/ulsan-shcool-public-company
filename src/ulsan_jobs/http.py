@@ -135,12 +135,15 @@ class Http:
             return self.session.request(method, url, proxies={"http": self.kr_proxy, "https": self.kr_proxy}, **kwargs)
         except requests.exceptions.ProxyError as exc:
             # 오류 문구에는 중계 주소(아이디·비밀번호)가 들어갈 수 있어 종류만 남긴다
-            if "Unable to connect to proxy" in str(exc):
-                log.warning("국내 중계 서버에 닿지 않아 이번 실행은 중계 없이 접속")
-                self.kr_proxy = None
-            else:
+            # urllib3 는 중계가 그 사이트를 거절한 경우(Tunnel connection failed)도
+            # 'Unable to connect to proxy' 로 감싸므로 Tunnel 문구를 먼저 본다
+            msg = str(exc)
+            if "Tunnel connection failed" in msg and " 407 " not in msg:
                 log.warning("중계로 %s 에 닿지 않아 바로 접속", host)
                 self._direct_hosts.add(host)
+            else:  # 중계 서버 꺼짐·인증 실패(407)
+                log.warning("국내 중계 서버에 닿지 않아 이번 실행은 중계 없이 접속")
+                self.kr_proxy = None
             return self.session.request(method, url, **kwargs)
 
     def _read_body(self, resp: requests.Response) -> None:
