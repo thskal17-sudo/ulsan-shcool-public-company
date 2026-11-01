@@ -8,10 +8,12 @@ on:
     workflows: ["매일 강사 공고 수집·메일 발송", "캠프·교육 수주 공고 (나라장터·S2B)"]
     types: [completed]
   # 경남·평생교육원 보고서가 나중에 도착하는 날을 위한 예비 확인 (GitHub 예약은 몇 시간씩 밀릴 수 있음).
-  # 09:00 KST 가 지나면 도착한 것만으로 보낸다 (config/briefing.yaml 의 send_anyway_after)
+  # 08:00 KST 가 지나면 도착한 것만으로 보낸다 (config/briefing.yaml 의 send_anyway_after).
+  # 보내면서 강사잇다 사이트에 공고를 넣고, 사이트가 Threads 에 새 공고를 올린다 → 목표 08:10 무렵.
   schedule:
     - cron: "53 21 * * *" # 06:53 KST
     - cron: "7 23 * * *" # 08:07 KST
+    - cron: "27 23 * * *" # 08:27 KST (08:07 예약이 밀리거나 빠진 날 대비)
     - cron: "23 0 * * *" # 09:23 KST
   workflow_dispatch:
     inputs:
