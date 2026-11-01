@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime
 
 from ulsan_jobs.briefing import (
@@ -406,3 +407,92 @@ def test_run_briefing_mail_still_goes_when_site_rejects(tmp_path, monkeypatch):
     assert out.sent and out.briefing.imported.error.startswith("사이트가 거절함 (HTTP 401)")
     html = sent[0].get_body(("html",)).get_content()
     assert "사이트 자동 등록 실패" in html and "/admin/jobs/upload" in html
+
+
+# ---- 원문에서 내려간 공고 (경남 removed.json → 사이트 받는 문 removed) ----
+
+REMOVED_JSON = json.dumps({"generated_at": "2026-09-30T05:00:00+09:00", "removed": [
+    {"url": "https://www.gne.go.kr/works/user/recruitment/BD_recruitmentDetail.do?regSn=1815262",
+     "title": "11월 전일제 강사 모집 공고", "org": "동포초", "removed_at": "2026-09-30T04:51:00+09:00"},
+    {"url": "javascript:void(0)", "title": "주소 이상", "org": "x"},  # https 가 아니면 버린다
+]}, ensure_ascii=False).encode()
+
+
+def _fetch_with_removed(upload, removed=REMOVED_JSON):
+    def fetch(url):
+        if "Gyeongnam" not in url:
+            return None
+        if url.endswith(".xlsx"):
+            return upload
+        if url.endswith("removed.json"):
+            return removed
+        return REPORT.encode()
+    return fetch
+
+
+def test_upload_reads_gyeongnam_removed_list(tmp_path):
+    from ulsan_jobs.briefing import build_upload
+
+    upload = _gyeongnam_upload(tmp_path)
+    cfg = load_config(ROOT / "config")
+    fetch = _fetch_with_removed(upload)
+    b = gather(cfg, TODAY, _db(tmp_path), fetch)
+    up = build_upload(cfg, b, _db(tmp_path), fetch, tmp_path / "out", ROOT / "config")
+    assert up.removed == [{"url": "https://www.gne.go.kr/works/user/recruitment/BD_recruitmentDetail.do?regSn=1815262",
+                           "title": "11월 전일제 강사 모집 공고", "org": "동포초", "region": "경남"}]
+    assert up.by_region["경남"] == 3  # 합본은 그대로
+
+    # removed.json 이 없거나 깨져 있어도 합본은 그대로 만든다
+    for broken in (None, b"not json", b'{"removed": "x"}'):
+        fetch = _fetch_with_removed(upload, broken)
+        up = build_upload(cfg, gather(cfg, TODAY, _db(tmp_path), fetch), _db(tmp_path), fetch, tmp_path / "o2", ROOT / "config")
+        assert up.removed == [] and up.by_region["경남"] == 3 and "경남" not in up.missing
+
+
+def test_push_upload_sends_removed_once_and_collects_hidden():
+    from ulsan_jobs.briefing import push_upload
+
+    calls = []
+
+    def post(url, json, headers, timeout):
+        calls.append(json)
+        return _Resp(200, {"received": len(json["rows"]), "created": 0, "skipped": [], "failed": [],
+                           "hidden": [{"id": 9, "title": "11월 전일제 강사 모집 공고"}] if "removed" in json else []})
+
+    rows = [{"제목": f"공고 {i}"} for i in range(250)]
+    r = push_upload(rows, "https://x", "t", post=post, removed=["https://a/1", "https://a/1", "https://a/2"])
+    assert [("removed" in c) for c in calls] == [True, False]  # 첫 묶음에만
+    assert calls[0]["removed"] == ["https://a/1", "https://a/2"]  # 겹친 주소는 한 번
+    assert r.hidden == ["11월 전일제 강사 모집 공고"] and r.error == ""
+
+    # 올릴 줄이 없어도 내려간 공고가 있으면 한 번 보낸다. 둘 다 없으면 보내지 않는다
+    calls.clear()
+    r = push_upload([], "https://x", "t", post=post, removed=["https://a/1"])
+    assert calls == [{"rows": [], "removed": ["https://a/1"]}] and r.hidden == ["11월 전일제 강사 모집 공고"]
+    calls.clear()
+    push_upload([], "https://x", "t", post=post)
+    assert calls == []
+
+
+def test_run_briefing_reports_hidden_postings(tmp_path, monkeypatch):
+    from ulsan_jobs.mailer import MailConfig
+
+    fetch = _fetch_with_removed(_gyeongnam_upload(tmp_path))
+    sent, posted = [], []
+    monkeypatch.setattr("ulsan_jobs.mailer.MailConfig.from_env",
+                        classmethod(lambda cls: MailConfig("me@x.com", "pw", ["me@x.com"])))
+    monkeypatch.setattr("ulsan_jobs.mailer.send", lambda cfg, msg: sent.append(msg))
+    monkeypatch.setenv("BRIEFING_TO", "a@x.com")
+    monkeypatch.setenv("GANGSAITDA_IMPORT_TOKEN", "secret-token")
+
+    def post(url, json, headers, timeout):
+        posted.append(json.get("removed"))
+        return _Resp(200, {"received": len(json["rows"]), "created": 1, "skipped": [], "failed": [],
+                           "hidden": [{"id": 9, "title": "11월 전일제 강사 모집 공고"}]})
+
+    out = run_briefing(db_path=_db(tmp_path), state_path=tmp_path / "s.txt", send_mail=True, force=True,
+                       config_dir=ROOT / "config", now=NOW, fetch=fetch, out_dir=tmp_path / "o", post=post)
+    assert posted == [["https://www.gne.go.kr/works/user/recruitment/BD_recruitmentDetail.do?regSn=1815262"]]
+    assert out.briefing.imported.hidden == ["11월 전일제 강사 모집 공고"]
+    html = sent[0].get_body(("html",)).get_content()
+    assert "원문에서 내려간 공고 <b>1</b>건을 사이트에서 숨김" in html and "11월 전일제 강사 모집 공고" in html

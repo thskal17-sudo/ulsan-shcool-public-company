@@ -20,6 +20,7 @@
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 import sqlite3
@@ -299,6 +300,9 @@ class UploadFile:
     by_region: dict[str, int] = field(default_factory=dict)
     missing: list[str] = field(default_factory=list)  # 이번 파일에 못 넣은 곳 (도착 전·읽기 실패)
     data: list[dict] = field(default_factory=list)  # 합본 줄 (칸 이름 → 값). 사이트로 보낼 때 쓴다
+    # 원문에서 내려간 공고 {url, title, org, region}. 지역 저장소의 removed.json (지금은 경남).
+    # 사이트로 보내면 원문 링크가 같은 공고를 사이트에서 숨긴다
+    removed: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -310,6 +314,7 @@ class ImportResult:
     skipped: int = 0  # 건너뛴 줄 (이미 있음·보류)
     failed: list[tuple[str, str]] = field(default_factory=list)  # (제목, 이유) — 사이트가 넣지 못한 줄
     error: str = ""  # 보내기 자체가 실패한 이유 (열쇠 틀림, 접속 실패 등)
+    hidden: list[str] = field(default_factory=list)  # 원문에서 내려가 사이트가 숨긴 공고 제목
 
 
 def _as_date(value) -> date | None:
@@ -392,6 +397,8 @@ def build_upload(cfg: dict, b: Briefing, local_db: Path | None, fetch, out_dir: 
                 got = read_rows(body)
                 for r in got:
                     r["메모"] = " · ".join(x for x in (f"{name} 수집", str(r.get("메모") or "")) if x)
+                if src.get("removed_url"):
+                    out.removed.extend(_removed_entries(fetch(src["removed_url"]), name))
             else:
                 continue
         except Exception as exc:  # noqa: BLE001 — 한 곳이 깨져도 나머지로 만든다
@@ -428,7 +435,24 @@ def build_upload(cfg: dict, b: Briefing, local_db: Path | None, fetch, out_dir: 
     return out
 
 
+def _removed_entries(body: bytes | None, region: str) -> list[dict]:
+    """지역 저장소의 removed.json → [{url, title, org, region}]. 없거나 깨졌으면 빈 목록 (합본·등록은 그대로 한다)."""
+    if not body:
+        return []
+    try:
+        items = json.loads(body.decode("utf-8")).get("removed") or []
+    except (ValueError, AttributeError, UnicodeDecodeError):
+        return []
+    out = []
+    for e in items:
+        url = str((e or {}).get("url") or "").strip() if isinstance(e, dict) else ""
+        if url.startswith("https://"):
+            out.append({"url": url, "title": str(e.get("title") or ""), "org": str(e.get("org") or ""), "region": region})
+    return out
+
+
 IMPORT_BATCH = 200  # 사이트가 한 번에 받는 최대 줄 수
+REMOVED_MAX = 100  # 사이트가 한 번에 받는 '내려간 공고' 원문 주소 수
 
 
 def _json_value(value):
@@ -442,23 +466,31 @@ def _json_value(value):
     return str(value)
 
 
-def push_upload(rows: list[dict], url: str, token: str, post=None) -> ImportResult:
+def push_upload(rows: list[dict], url: str, token: str, post=None, removed: list[str] | None = None) -> ImportResult:
     """합본 줄을 강사잇다 사이트의 받는 문으로 보낸다. 사이트가 엑셀 올리기와 같은 규칙으로 확인해 올린다.
 
     같은 제목은 사이트가 건너뛰므로 하루에 여러 번 보내도 공고가 두 번 올라가지 않는다.
     '보류' 줄도 그대로 보내고 사이트가 건너뛴다 (돌아온 결과에 남게).
+    removed: 원문에서 내려간 공고의 원문 주소. 첫 묶음에 함께 실어 보내면 사이트가 원문 링크가 같은 공고를 숨긴다.
+    여러 번 보내도 이미 숨긴 공고는 그대로라 괜찮다.
     """
     import requests
 
     post = post or requests.post
     result = ImportResult(sent=len(rows))
+    removed = list(dict.fromkeys(removed or []))[:REMOVED_MAX]
     # 모든 줄에 같은 칸 이름을 넣어 보낸다 (빈 칸은 None). 엑셀에서 읽은 줄은 빈 칸이 아예 빠져 있어서,
     # '보류' 줄(마감일 없음)만 모인 묶음을 그대로 보내면 사이트가 "마감일 칸이 없다"며 묶음 전체를 거절한다.
     names = list(dict.fromkeys(k for r in rows for k in r))
-    for start in range(0, len(rows), IMPORT_BATCH):
+    # 줄이 없어도 내려간 공고가 있으면 한 번은 보낸다
+    starts = list(range(0, len(rows), IMPORT_BATCH)) or ([0] if removed else [])
+    for start in starts:
         batch = [{k: _json_value(r.get(k)) for k in names} for r in rows[start:start + IMPORT_BATCH]]
+        payload: dict = {"rows": batch}
+        if removed and start == 0:
+            payload["removed"] = removed
         try:
-            resp = post(url, json={"rows": batch}, headers={"Authorization": f"Bearer {token}"}, timeout=60)
+            resp = post(url, json=payload, headers={"Authorization": f"Bearer {token}"}, timeout=60)
         except requests.exceptions.RequestException as exc:
             result.error = f"사이트 접속 실패: {type(exc).__name__}"
             return result
@@ -473,6 +505,7 @@ def push_upload(rows: list[dict], url: str, token: str, post=None) -> ImportResu
         result.created += int(body.get("created", 0))
         result.skipped += len(body.get("skipped", []))
         result.failed += [(str(f.get("title", "")), str(f.get("reason", ""))) for f in body.get("failed", [])]
+        result.hidden += [str(h.get("title", "")) for h in body.get("hidden", []) if isinstance(h, dict)]
     return result
 
 
@@ -637,6 +670,10 @@ def html_body(b: Briefing, limit: int = 15) -> str:
             if imp.failed:
                 items = "".join(f"<li>{escape(t)} — {escape(r)}</li>" for t, r in imp.failed[:10])
                 parts.append(f"<ul style='margin:0 0 6px;font-size:13px;color:#b45309'>{items}</ul>")
+            if imp.hidden:
+                items = "".join(f"<li>{escape(t)}</li>" for t in imp.hidden[:10])
+                parts.append(f"<p style='margin:4px 0'>🙈 원문에서 내려간 공고 <b>{len(imp.hidden)}</b>건을 사이트에서 숨김</p>"
+                             f"<ul style='margin:0 0 6px;font-size:13px'>{items}</ul>")
     if up is not None and up.path is not None:
         regions = ", ".join(f"{k} {v}" for k, v in up.by_region.items())
         how = ("확인용으로 붙였습니다 (사이트에 이미 올라갔으니 다시 올리지 않아도 됩니다)"
@@ -726,9 +763,10 @@ def run_briefing(
         # 메일을 안 보내는 시험 실행(--no-mail)에서는 사이트도 건드리지 않는다.
         import_url = str(cfg.get("gangsaitda", {}).get("import_url") or "").strip()
         token = os.environ.get("GANGSAITDA_IMPORT_TOKEN", "").strip()
-        if send_mail and import_url and token and b.upload is not None and b.upload.data:
+        if send_mail and import_url and token and b.upload is not None and (b.upload.data or b.upload.removed):
             try:
-                b.imported = push_upload(b.upload.data, import_url, token, post=post)
+                b.imported = push_upload(b.upload.data, import_url, token, post=post,
+                                         removed=[e["url"] for e in b.upload.removed])
             except Exception as exc:  # noqa: BLE001 — 등록이 실패해도 브리핑은 보낸다 (엑셀을 직접 올리면 됨)
                 b.imported = ImportResult(sent=len(b.upload.data), error=f"{type(exc).__name__}: {exc}"[:200])
     already = state_path.exists() and state_path.read_text(encoding="utf-8").strip() == today.isoformat()

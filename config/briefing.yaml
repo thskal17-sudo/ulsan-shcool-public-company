@@ -35,6 +35,8 @@ sources:
     link: https://github.com/thskal17-sudo/Gyeongnam-Instructor-Announcement/blob/main/reports/{date}.md
     # 그 저장소 report 가 매일 같이 커밋하는 강사잇다 양식 (합본 엑셀에 넣는다)
     upload_url: https://raw.githubusercontent.com/thskal17-sudo/Gyeongnam-Instructor-Announcement/main/reports/gangsaitda/latest.xlsx
+    # 같이 커밋하는 '원문에서 내려간 공고' 목록. 사이트 받는 문에 removed 로 보내 원문 링크가 같은 공고를 숨긴다
+    removed_url: https://raw.githubusercontent.com/thskal17-sudo/Gyeongnam-Instructor-Announcement/main/reports/gangsaitda/removed.json
   - id: lifelong
     name: 대학평생교육원
     type: md_report

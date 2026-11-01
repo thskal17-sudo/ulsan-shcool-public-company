@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: ulsan-jobs
+Version: 0.1.0
+Summary: 울산 공공기관 강사 구인공고를 매일 수집해 엑셀로 메일 발송
+Requires-Python: >=3.11
