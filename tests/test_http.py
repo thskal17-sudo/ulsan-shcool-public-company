@@ -1,3 +1,4 @@
+import ssl
 from http.client import RemoteDisconnected
 
 import pytest
@@ -152,3 +153,12 @@ def test_kr_proxy_auth_failure_disables_proxy_for_run():
     client.get("https://a.go.kr/1")
     client.get("https://b.or.kr/2")
     assert calls == [True, False, False] and client.kr_proxy is None
+
+
+def test_legacy_tls_applies_through_kr_proxy():
+    """구형 TLS 사이트는 중계를 거쳐도 구형 설정(SECLEVEL=0)으로 접속한다."""
+    from ulsan_jobs.http import LegacyTLSAdapter
+
+    manager = LegacyTLSAdapter().proxy_manager_for("http://u:p@1.2.3.4:8888")
+    ctx = manager.connection_pool_kw["ssl_context"]
+    assert ctx.minimum_version == ssl.TLSVersion.TLSv1
