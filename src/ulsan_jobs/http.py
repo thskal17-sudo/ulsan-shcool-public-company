@@ -192,12 +192,21 @@ class Http:
 
 class LegacyTLSAdapter(HTTPAdapter):
     def init_poolmanager(self, *args, **kwargs):
-        ctx = ssl.create_default_context(cafile=certifi.where())
-        ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
-        ctx.minimum_version = ssl.TLSVersion.TLSv1
-        ctx.options |= getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0x4)
-        kwargs["ssl_context"] = ctx
+        kwargs["ssl_context"] = _legacy_context()
         return super().init_poolmanager(*args, **kwargs)
+
+    def proxy_manager_for(self, proxy, **proxy_kwargs):
+        # 국내 중계(KR_PROXY_URL)를 거칠 때도 사이트와의 TLS 는 구형 설정으로 맺는다
+        proxy_kwargs["ssl_context"] = _legacy_context()
+        return super().proxy_manager_for(proxy, **proxy_kwargs)
+
+
+def _legacy_context() -> ssl.SSLContext:
+    ctx = ssl.create_default_context(cafile=certifi.where())
+    ctx.set_ciphers("DEFAULT:@SECLEVEL=0")
+    ctx.minimum_version = ssl.TLSVersion.TLSv1
+    ctx.options |= getattr(ssl, "OP_LEGACY_SERVER_CONNECT", 0x4)
+    return ctx
 
 
 def is_connect_failure(exc: requests.exceptions.ConnectionError) -> bool:
