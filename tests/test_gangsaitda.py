@@ -66,3 +66,16 @@ def test_workbook_keeps_template_and_adds_rows(tmp_path):
     assert ws["K2"].hyperlink.target == "https://example.org/1"
     assert ws["N2"].value is None and ws["N3"].value == HOLD
     assert ws["F2"].alignment.wrap_text
+
+
+def test_detail_is_posting_body_when_found():
+    """상세 내용 통일 (2026-11-05): 공고 본문을 가져왔으면 본문을 그대로 쓴다."""
+    from datetime import date as _date
+
+    from ulsan_jobs.gangsaitda import row_values as _row_values
+    from ulsan_jobs.models import Posting as _Posting
+
+    body = "2026학년도 고헌초등학교 초등돌봄 겨울방학 특기적성 프로그램 강사 모집\n1. 모집분야 및 인원: 뉴스포츠 1명"
+    p = _Posting("use_job", "2026학년도 고헌초등학교 초등돌봄 겨울방학 특기적성 프로그램 강사 모집", "https://example.org/3",
+                 org_name="고헌초등학교", deadline=_date(2026, 11, 4), info={"body": body})
+    assert _row_values(p, "울산교육청 인력풀")["상세 내용"] == body

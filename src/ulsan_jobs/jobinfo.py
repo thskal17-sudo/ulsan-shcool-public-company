@@ -15,7 +15,7 @@ import re
 
 
 # 찾는 방법을 고치면 올린다. 저장된 정보의 버전이 다르면 다음 실행 때 공고문을 다시 읽는다
-INFO_VERSION = 6
+INFO_VERSION = 7  # 7: 상세 페이지 본문(body)도 남김 (강사잇다 상세 내용 통일, 2026-11-05)
 
 
 def _words(*words: str) -> str:
