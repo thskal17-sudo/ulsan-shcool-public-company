@@ -23,7 +23,8 @@ _BODY_WORD = re.compile(r"접수|모집|채용|자격|기간|인원|강사|서�
 _BLOCK = ["div", "td", "article", "section", "dd", "main", "table", "tbody", "tr", "ul", "li", "form", "body"]
 _META = re.compile(r"^(작성자|작성일|등록일|게시일|수정일|조회수?|담당부서|담당자|부서|전화번호|첨부파일|첨부|파일|"
                    r"이전글|다음글|목록|글쓰기|공유하기|인쇄|미리보기|다운로드|바로보기|내려받기|등록자연락처|출처|"
-                   r"공공누리|만족도|작성기관|분류|구분|번호|제목|내용|상세보기|글쓴이|날짜|추천|스크랩)\s*[:：]?\s*$")
+                   r"공공누리|만족도|작성기관|분류|구분|번호|제목|내용|상세보기|글쓴이|날짜|추천|스크랩|"
+                   r"다운로드 정보|다운로드 횟수|바로듣기|주소 복사|링크 복사|크게|작게|\(\s*\d+\s*회\s*\))\s*[:：]?\s*$")
 # 글 정보 칸 이름과 값이 붙은 줄 ('작성자노동자종합복지회관', '작성일2026-11-02', '조회수176')
 _META_VALUE = re.compile(r"^(작성자|작성일|등록일|게시일|수정일|조회수|조회)\s*[:：]?\s*\S.{0,30}$")
 _SENTENCE = re.compile(r"(다|요|니다)\.?\s*$")
@@ -87,6 +88,8 @@ def body_text(page: BeautifulSoup | bytes | str, title: str = "", limit: int = B
             continue  # 제목 되풀이 ('2026학년도 …' 처럼 앞뒤가 조금 붙은 것까지. '… 공고입니다.' 같은 문장은 남긴다)
         if re.fullmatch(r"[\d\-.: /()]+", line):
             continue  # 날짜·숫자만 있는 줄 (글 정보 값)
+        if lines and lines[-1] == line:
+            continue  # 같은 줄 되풀이 (칸 이름과 값이 같은 글 등)
         lines.append(line)
     text = "\n".join(lines).strip()
     return _cut(text, limit) if len(text) >= MIN_BODY else ""

@@ -49,3 +49,12 @@ def test_notice_excerpt():
     out = notice_excerpt(long)
     assert "\n\n" not in out and out.startswith("1. 모집 분야: 방과후 영어")
     assert len(notice_excerpt("가나다라 마바사 아자차\n" * 400)) <= 1500
+
+
+def test_board_button_words_are_dropped():
+    page = """<html><body><div class="bbs_ViewA"><div class="bbsV_cont">
+    <p>1. 선발 예정 인원: 1명</p><p>2. 채용과목 : 조리</p><p>3. 근무 기간: 2026.11.23.~ 2026.12.18.</p>
+    <p>4. 접수 기간: 2026. 11. 3.(화) ~ 2026. 11. 6.(금) 16:00</p></div>
+    <div><span>다운로드 정보</span><span>( 2회 )</span><span>바로듣기</span><span>주소 복사</span></div></div></body></html>"""
+    text = body_text(page, "세연고등학교 시간강사(조리) 채용 공고")
+    assert text.endswith("4. 접수 기간: 2026. 11. 3.(화) ~ 2026. 11. 6.(금) 16:00")
