@@ -183,7 +183,9 @@ def test_pipeline_reads_notice_info_once(tmp_path, rules, monkeypatch):
     posting = next(p for p in store.unreported() if p.post_key == "r")
     assert posting.deadline == date(2026, 10, 2)
     assert posting.title == "방과후 로봇과학 강사 모집 공고"  # 목록에서 잘린 제목은 전체로
-    assert posting.info == {"schedule": "2026.10.6.~12.15.", "target": "초등 3~4학년", "headcount": 1, "v": INFO_VERSION}
+    assert posting.info == {"schedule": "2026.10.6.~12.15.", "target": "초등 3~4학년", "headcount": 1, "v": INFO_VERSION,
+                            "body": "○ 교육기간: 2026.10.6.~12.15.\n○ 교육대상: 초등 3~4학년\n○ 모집인원: 1명\n"
+                                    "접수기간: 2026. 9. 21. ~ 2026. 10. 2."}
     assert InfoBoard.fetched == ["https://example.org/r"]
 
     # 다음 날: 이미 읽은 공고문은 다시 열지 않는다
