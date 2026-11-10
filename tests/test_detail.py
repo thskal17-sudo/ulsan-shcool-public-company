@@ -211,3 +211,32 @@ def test_notice_is_read_again_when_extraction_improves(tmp_path, rules, monkeypa
     assert InfoBoard.fetched == ["https://example.org/r"]
     assert store.detail_state(uid)[1]["schedule"] == "2026.10.6.~12.15."
     store.close()
+
+
+class FlakyInfoBoard(InfoBoard):
+    """첫 실행에는 상세 페이지가 막히고(부산교육청 접속 대기 400), 다음 실행에는 열린다."""
+    blocked = True
+
+    def fetch_detail(self, posting):
+        if FlakyInfoBoard.blocked:
+            raise RuntimeError("400 Client Error: Bad Request")
+        return super().fetch_detail(posting)
+
+
+def test_deadline_is_found_next_run_when_detail_was_blocked(tmp_path, rules, monkeypatch):
+    # 처음 볼 때 상세 페이지가 막혀 마감일을 못 찾은 글도 다음 실행 때 다시 열어 마감일을 찾는다 ('원문확인'에 남지 않게)
+    from ulsan_jobs import pipeline
+
+    monkeypatch.setitem(pipeline.COLLECTORS, "info", FlakyInfoBoard)
+    src = Source("info", "정보 게시판", "info", url="https://example.org/list", keyword_filter=False)
+    store = Store(tmp_path / "db.sqlite")
+    now = datetime(2026, 9, 26, 7, 0, tzinfo=KST)
+    FlakyInfoBoard.blocked = True
+    collect_all([src], rules, store, NoHttp(), now)
+    uid = next(p.uid for p in store.unreported() if p.post_key == "r")
+    assert store.detail_state(uid)[0] is None
+
+    FlakyInfoBoard.blocked = False
+    collect_all([src], rules, store, NoHttp(), now)
+    assert store.detail_state(uid)[0] == date(2026, 10, 2)
+    store.close()

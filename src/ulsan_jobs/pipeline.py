@@ -200,9 +200,12 @@ def _collect_source(
         if not (p.detail_url and worth_detail(p, today, rules)):
             continue
         deadline, info, stored_status = store.detail_state(p.uid)
-        need_deadline = is_new and deadline is None
         # 강사잇다 양식용: 마감 전 모집공고는 공고문을 한 번 읽어 수업 일정·대상 등을 찾아 둔다
         stale = info is None or info.get("v") != INFO_VERSION
+        # 처음 본 글, 또는 (전에 상세 페이지를 못 읽었거나 찾는 방법이 바뀌어) 공고문을 다시 읽는 글은 마감일도 다시 찾는다.
+        # 부산교육청은 접속이 몰리면 상세 페이지를 막아(400·대기 화면) 처음 볼 때 마감일을 못 찾은 글이 '원문확인'으로
+        # 계속 남았다 (2026-11-10 유치원 방과후과정 공고 13건). 경북 수집과 같은 규칙.
+        need_deadline = deadline is None and (is_new or stale)
         need_info = stored_status == "모집중" and stale and (deadline is None or deadline >= today)
         if not (need_deadline or need_info):
             continue
