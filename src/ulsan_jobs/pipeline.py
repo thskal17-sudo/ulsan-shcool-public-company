@@ -25,6 +25,7 @@ from .matching import finished_by
 from .mailer import MailConfig, build_message, html_body, send, subject_line, text_body
 from .models import Posting, SourceResult, now_kst
 from .report_excel import build_report, sort_key
+from .school_district import fill_districts
 from .storage import EXCLUDED, Store
 
 log = logging.getLogger(__name__)
@@ -335,7 +336,8 @@ def run(
 
     store = Store(db_path)
     try:
-        results = collect_all(sources, rules, store, http or Http(), now)
+        http = http or Http()
+        results = collect_all(sources, rules, store, http, now)
         store.log_runs(results, now)
         store.commit()
         already_mailed = once_daily and store.mailed_on(today)
@@ -347,6 +349,11 @@ def run(
             (p for p in pending if p.status in statuses and is_fresh(p, today, rules)), key=lambda p: sort_key(p, today)
         )
         active = sorted(store.active(today, rules.active_max_age_days, statuses), key=lambda p: sort_key(p, today))
+        # 학교·유치원·시설 공고의 구·군을 채운다 ('울산' → '울산 북구', school_district.py)
+        filled = fill_districts(active, store, http)
+        if filled:
+            log.info("학교·시설 주소로 구·군 %d건 채움", filled)
+        store.commit()
         closing_soon = [
             p for p in active if p.deadline is not None and 0 <= (p.deadline - today).days <= rules.closing_soon_days
         ]

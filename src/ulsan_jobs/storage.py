@@ -47,6 +47,12 @@ CREATE TABLE IF NOT EXISTS mail_log (
     kind      TEXT NOT NULL,
     new       INTEGER NOT NULL
 );
+-- 나이스에서 찾은 학교 → 구·군 (school_district.py). 여러 구면 '남구,북구', '' = 찾지 못함 (다시 묻지 않음)
+CREATE TABLE IF NOT EXISTS school_districts (
+    school     TEXT PRIMARY KEY,
+    district   TEXT NOT NULL,
+    checked_at TEXT NOT NULL
+);
 """
 
 
@@ -181,6 +187,17 @@ class Store:
             "SELECT 1 FROM mail_log WHERE kind = '정기' AND substr(sent_at, 1, 10) = ? LIMIT 1", (day.isoformat(),)
         ).fetchone()
         return row is not None
+
+    def school_district(self, school: str) -> str | None:
+        """나이스에서 찾아 둔 학교의 구·군 (여러 구면 '남구,북구'). 물어본 적 없으면 None, 찾지 못했으면 ''."""
+        row = self.conn.execute("SELECT district FROM school_districts WHERE school = ?", (school,)).fetchone()
+        return None if row is None else row["district"]
+
+    def set_school_district(self, school: str, district: str) -> None:
+        self.conn.execute(
+            "INSERT OR REPLACE INTO school_districts VALUES (?, ?, ?)",
+            (school, district, datetime.now().isoformat(timespec="seconds")),
+        )
 
     def commit(self) -> None:
         self.conn.commit()
