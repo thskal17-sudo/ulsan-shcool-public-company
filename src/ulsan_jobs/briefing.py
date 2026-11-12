@@ -336,6 +336,7 @@ def _ulsan_rows(db: Path, today: date, config_dir: Path) -> list[dict]:
     from .config import load_rules, load_settings
     from .gangsaitda import row_values
     from .report_excel import sort_key
+    from .school_district import fill_districts
     from .storage import Store
 
     rules = load_rules(config_dir)
@@ -344,6 +345,9 @@ def _ulsan_rows(db: Path, today: date, config_dir: Path) -> list[dict]:
     store = Store(db)
     try:
         active = sorted(store.active(today, rules.active_max_age_days, statuses), key=lambda p: sort_key(p, today))
+        # 수집 때 찾아 둔 학교 주소·시설 이름표로 구·군을 채운다 ('울산' → '울산 북구'). 나이스에는 다시 묻지 않는다.
+        # 이것이 없으면 수집 메일의 양식에는 구·군이 있어도 사이트로 보내는 줄은 '울산'으로 남는다 (2026-11-13)
+        fill_districts(active, store, http=None, lookup=False)
     finally:
         store.close()
     return [row_values(p, names.get(p.source_id, "")) for p in active]
