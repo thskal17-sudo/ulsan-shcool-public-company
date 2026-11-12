@@ -42,3 +42,11 @@ def _offline_s2b(monkeypatch):
     from ulsan_jobs import s2b
 
     monkeypatch.setattr(s2b, "S2BClient", _NoS2B)
+
+
+@pytest.fixture(autouse=True)
+def _no_neis(monkeypatch):
+    """시험은 나이스(학교 주소)에 실제로 접속하지 않는다. 필요한 시험은 school_district.neis_addresses 를 다시 바꾼다."""
+    from ulsan_jobs import school_district
+
+    monkeypatch.setattr(school_district, "neis_addresses", lambda http, school: [])
