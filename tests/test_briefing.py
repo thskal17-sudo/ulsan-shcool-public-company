@@ -496,3 +496,33 @@ def test_run_briefing_reports_hidden_postings(tmp_path, monkeypatch):
     assert out.briefing.imported.hidden == ["11월 전일제 강사 모집 공고"]
     html = sent[0].get_body(("html",)).get_content()
     assert "원문에서 내려간 공고 <b>1</b>건을 사이트에서 숨김" in html and "11월 전일제 강사 모집 공고" in html
+
+
+def test_ulsan_rows_fill_districts_from_saved_lookups(tmp_path, monkeypatch):
+    """사이트로 보내는 울산 줄에도 구·군이 들어간다: 수집 때 찾아 둔 학교 주소와 시설 이름표 (나이스에는 묻지 않음)."""
+    from ulsan_jobs import school_district
+    from ulsan_jobs.briefing import _ulsan_rows
+
+    def no_network(http, school):
+        raise AssertionError("브리핑에서는 나이스에 묻지 않는다")
+
+    monkeypatch.setattr(school_district, "neis_addresses", no_network)
+    db = tmp_path / "postings.db"
+    store = Store(db)
+    posts = [
+        Posting(source_id="s1", title="중산초병설유치원 겨울방학 중 방과후 강사 채용", url="https://u/1", post_key="1",
+                org_name="중산초등학교병설유치원", district="울산전체", deadline=date(2026, 10, 20)),
+        Posting(source_id="s1", title="2027년 상반기 문수체육관 교육강사(프리랜서) 위촉 공고", url="https://u/2",
+                post_key="2", org_name="문수경기장", district="울산전체", deadline=date(2026, 10, 20)),
+        Posting(source_id="s1", title="옥현유치원 방과후 강사 채용", url="https://u/3", post_key="3",
+                org_name="옥현유치원", district="울산전체", deadline=date(2026, 10, 20)),  # 아직 찾아 둔 기록 없음
+    ]
+    for p in posts:
+        store.upsert(p, NOW)
+    store.set_school_district("중산초등학교", "북구")
+    store.commit()
+    store.close()
+    rows = _ulsan_rows(db, date(2026, 10, 1), ROOT / "config")
+    assert {r["기관명"]: r["지역"] for r in rows} == {
+        "중산초등학교병설유치원": "울산 북구", "문수경기장": "울산 남구", "옥현유치원": "울산",
+    }

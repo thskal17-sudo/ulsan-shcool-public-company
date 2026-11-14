@@ -101,8 +101,9 @@ def neis_addresses(http, school: str) -> list[str]:
     return [r.get("ORG_RDNMA", "") for r in rows if r.get("SCHUL_NM") == school]
 
 
-def fill_districts(postings: list[Posting], store, http) -> int:
-    """구·군을 모르는 공고에 구·군을 채운다 (p.district, 메모리만). 채운 공고 수."""
+def fill_districts(postings: list[Posting], store, http, lookup: bool = True) -> int:
+    """구·군을 모르는 공고에 구·군을 채운다 (p.district, 메모리만). 채운 공고 수.
+    lookup=False 면 나이스에 묻지 않고 수집 때 찾아 둔 기록(school_districts)과 시설 이름표만 쓴다 (오늘의 브리핑)."""
     filled = lookups = 0
     neis_down = False
     for p in postings:
@@ -117,7 +118,7 @@ def fill_districts(postings: list[Posting], store, http) -> int:
         for school in school_names(p.org_name, p.title):
             found = store.school_district(school)
             if found is None:
-                if neis_down or lookups >= LOOKUP_MAX:
+                if not lookup or neis_down or lookups >= LOOKUP_MAX:
                     break
                 lookups += 1
                 try:
