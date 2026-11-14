@@ -174,6 +174,30 @@ def _kst_date(ts: str | None) -> date | None:
         return None
 
 
+def _saved_districts(conn: sqlite3.Connection) -> dict[str, str]:
+    """수집 때 나이스에서 찾아 둔 학교 → 구·군 (school_districts 표). 표가 없는 DB 면 빈 사전."""
+    try:
+        return {r[0]: r[1] for r in conn.execute("SELECT school, district FROM school_districts")}
+    except sqlite3.OperationalError:
+        return {}
+
+
+def _district_of(r: sqlite3.Row, found: dict[str, str]) -> str:
+    """기록의 지역. 구·군을 모르면('부산전체') 찾아 둔 학교 주소·시설 이름표로 채운다 (school_district.py 와 같은 규칙)."""
+    from .school_district import pick_district, school_names, venue_district
+
+    district = r["district"] or ""
+    if district and not district.endswith("전체"):
+        return district
+    org, title = r["org_name"] or "", r["title"] or ""
+    for school in school_names(org, title):
+        picked = pick_district(found.get(school, ""), f"{org} {title}")
+        if picked:
+            return picked
+    venue = venue_district(f"{org} {title}") if "울산" in district else ""  # 시설 이름표는 울산 시설만
+    return venue or district
+
+
 def read_ulsan_db(path: Path, today: date, soon_days: int) -> tuple[bool, list[Item], list[Item], list[str]]:
     """→ (오늘 수집했는가, 오늘 알린 신규, 마감임박, 오늘 문제난 소스)."""
     conn = sqlite3.connect(path)
@@ -184,10 +208,11 @@ def read_ulsan_db(path: Path, today: date, soon_days: int) -> tuple[bool, list[I
         ready = bool(runs)
         problems = sorted({r["source_id"] for r in runs if r["state"] in ("오류", "시간초과")})
         new, closing = [], []
+        found = _saved_districts(conn)
         for r in conn.execute("SELECT * FROM postings WHERE status = '모집중'"):
             dl = date.fromisoformat(r["deadline"]) if r["deadline"] else None
             item = Item(title=r["title"], org=r["org_name"] or "", url=r["url"], deadline=dl,
-                        region=r["district"] or "", category=r["category"] or "")
+                        region=_district_of(r, found), category=r["category"] or "")
             if _kst_date(r["reported_at"]) == today:
                 new.append(item)
             if dl and 0 <= (dl - today).days <= soon_days:
@@ -513,15 +538,42 @@ def push_upload(rows: list[dict], url: str, token: str, post=None, removed: list
     return result
 
 
-def _place(it: Item, sec: Section) -> str:
-    if sec.id == "ulsan":
-        return "울산"
+def _title_key(title: str) -> str:
+    from .gangsaitda import clean_title
+
+    return re.sub(r"\s+", "", clean_title(title or ""))
+
+
+def upload_regions(rows: list[dict]) -> dict[str, str]:
+    """합본 줄(사이트로 보내는 줄)의 제목 → 지역 ('부산 사상구', '울산 북구'). 같은 제목이 다른 지역에 있으면 뺀다."""
+    out: dict[str, str] = {}
+    clash: set[str] = set()
+    for r in rows:
+        key, region = _title_key(str(r.get("제목") or "")), str(r.get("지역") or "").strip()
+        if not key or not region:
+            continue
+        if out.get(key, region) != region:
+            clash.add(key)
+        out[key] = region
+    return {k: v for k, v in out.items() if k not in clash}
+
+
+def _place(it: Item, sec: Section, regions: dict[str, str] | None = None) -> str:
+    """공유 글의 지역. 사이트에 올라가는 지역과 같게 쓴다 (합본 줄의 '지역' 칸, 예: '부산 사상구').
+    합본에 없으면 수집 기록의 지역 — 구·군을 모르면('부산전체') 지역 이름만."""
+    found = (regions or {}).get(_title_key(it.title))
+    if found:
+        return found
     first = re.split(r"[,·]", it.region or "")[0].strip()
-    return first or sec.name
+    if not first or first.endswith("전체") or (sec.id == "ulsan" and first == "울산"):
+        return sec.name
+    # '사상구' → '부산 사상구' (지역 이름이 짧은 섹션만: 울산·부산·경남·경북)
+    return first if first.startswith(sec.name) or len(sec.name) > 2 else f"{sec.name} {first}"
 
 
-def share_text(b: Briefing, cfg: dict) -> str:
-    """강사방에 그대로 붙여 넣을 오늘의 공고 요약 (제목·지역·D-day 만. 기관·지원 방법은 사이트에서)."""
+def share_text(b: Briefing, cfg: dict, regions: dict[str, str] | None = None) -> str:
+    """강사방에 그대로 붙여 넣을 오늘의 공고 요약 (제목·지역·D-day 만. 기관·지원 방법은 사이트에서).
+    regions: 제목 → 사이트에 올라가는 지역 (upload_regions)."""
     from .gangsaitda import clean_title
 
     g = cfg.get("gangsaitda") or {}
@@ -555,7 +607,7 @@ def share_text(b: Briefing, cfg: dict) -> str:
     lines = [head]
     for i, s in items[:limit]:
         dd = dday_label(i.deadline, d) if i.deadline else "마감 확인"
-        lines.append(f"- {clean_title(i.title)} ({_place(i, s)} · {dd})")
+        lines.append(f"- {clean_title(i.title)} ({_place(i, s, regions)} · {dd})")
     if len(items) > limit:
         lines.append(f"외 {len(items) - limit}건")
     lines.append(f"전체 보기: {site}")
@@ -757,12 +809,13 @@ def run_briefing(
     fetch = fetch or http_fetch
     b = gather(cfg, today, db_path, fetch)
     if cfg.get("gangsaitda", {}).get("enabled", True):
-        b.share_text = share_text(b, cfg)
         try:
             out_dir = out_dir or (out_html.parent if out_html else Path(tempfile.mkdtemp()))
             b.upload = build_upload(cfg, b, db_path, fetch, out_dir, config_dir)
         except Exception as exc:  # noqa: BLE001 — 엑셀이 실패해도 브리핑은 보낸다
             b.upload = UploadFile(missing=[f"합본 엑셀 실패: {type(exc).__name__}: {exc}"[:200]])
+        # 공유 글의 지역은 사이트에 올라가는 지역과 같게 ('부산전체' → '부산 사상구', 2026-11-14)
+        b.share_text = share_text(b, cfg, upload_regions(b.upload.data if b.upload else []))
         # 사이트 자동 등록: 받는 문 주소(설정)와 열쇠(GANGSAITDA_IMPORT_TOKEN)가 둘 다 있을 때만.
         # 메일을 안 보내는 시험 실행(--no-mail)에서는 사이트도 건드리지 않는다.
         import_url = str(cfg.get("gangsaitda", {}).get("import_url") or "").strip()
