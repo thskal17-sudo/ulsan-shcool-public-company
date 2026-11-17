@@ -275,7 +275,7 @@ def test_share_text_format():
     cfg = {"gangsaitda": {"site_url": "https://gangsaitda.kr", "share_max": 1}}
     assert share_text(b, cfg) == (
         "[오늘의 부울경 강사 공고] 9/30(수) 새 공고 2건 · 오늘 마감 1건\n"
-        "- 방과후 로봇 강사 모집 (울산 · D-2)\n"
+        "- 방과후 로봇 강사 모집 (울산 남구 · D-2)\n"
         "외 1건\n"
         "전체 보기: https://gangsaitda.kr"
     )
@@ -526,3 +526,51 @@ def test_ulsan_rows_fill_districts_from_saved_lookups(tmp_path, monkeypatch):
     assert {r["기관명"]: r["지역"] for r in rows} == {
         "중산초등학교병설유치원": "울산 북구", "문수경기장": "울산 남구", "옥현유치원": "울산",
     }
+
+
+def test_share_text_uses_site_regions():
+    """공유 글의 지역은 사이트로 보내는 줄의 지역과 같다. 합본에 없으면 '부산전체' 대신 '부산'."""
+    from ulsan_jobs.briefing import Item, share_text, upload_regions
+
+    busan = Section("busan", "부산", ready=True, new=[
+        Item("2026학년도 주감초등학교병설유치원 겨울방학 방과후과정 지원인력 채용", region="부산전체", deadline=date(2026, 10, 2)),
+        Item("부산 어딘가 강사 모집", region="부산전체", deadline=date(2026, 10, 3)),
+    ])
+    ulsan = Section("ulsan", "울산", ready=True, new=[
+        Item("중산초병설유치원 겨울방학 중 방과후 강사 채용", region="울산전체", deadline=date(2026, 10, 4)),
+    ])
+    rows = [
+        {"제목": "주감초등학교병설유치원 겨울방학 방과후과정 지원인력 채용", "지역": "부산 사상구"},
+        {"제목": "중산초병설유치원 겨울방학 중 방과후 강사 채용", "지역": "울산 북구"},
+        {"제목": "방과후 강사 모집", "지역": "부산 남구"},
+        {"제목": "방과후 강사 모집", "지역": "울산 중구"},  # 같은 제목이 다른 지역이면 쓰지 않는다
+    ]
+    regions = upload_regions(rows)
+    assert "방과후강사모집" not in regions
+    text = share_text(Briefing(TODAY, [ulsan, busan], CampSummary()), {}, regions)
+    assert text.splitlines()[1:4] == [
+        "- 주감초등학교병설유치원 겨울방학 방과후과정 지원인력 채용 (부산 사상구 · D-2)",
+        "- 부산 어딘가 강사 모집 (부산 · D-3)",
+        "- 중산초병설유치원 겨울방학 중 방과후 강사 채용 (울산 북구 · D-4)",
+    ]
+
+
+def test_read_db_fills_district_from_saved_lookups(tmp_path):
+    """사이트 합본에 없는 공고(마감 지난 신규 등)도 수집 때 찾아 둔 학교 주소로 지역을 쓴다."""
+    from ulsan_jobs.briefing import Item, read_ulsan_db, share_text
+
+    db = tmp_path / "postings.db"
+    store = Store(db)
+    for i, (org, title) in enumerate([("언양초등학교병설유치원", "언양초병설유치원 방과후 강사 채용"),
+                                      ("문수경기장", "문수체육관 교육강사 위촉 공고"),
+                                      ("옥현유치원", "옥현유치원 방과후 강사 채용")]):
+        store.upsert(Posting(source_id="s1", title=title, url=f"https://u/{i}", post_key=str(i), org_name=org,
+                             district="울산전체", deadline=date(2026, 10, 2)), NOW)
+    store.set_school_district("언양초등학교", "울주군")
+    store.mark_reported([Posting("s1", "x", "https://u/0", post_key=str(i)).uid for i in range(3)], NOW)
+    store.commit()
+    store.close()
+    _, new, _, _ = read_ulsan_db(db, TODAY, 3)
+    assert {i.org: i.region for i in new} == {"언양초등학교병설유치원": "울주군", "문수경기장": "남구", "옥현유치원": "울산전체"}
+    text = share_text(Briefing(TODAY, [Section("ulsan", "울산", ready=True, new=new)], CampSummary()), {})
+    assert "(울산 울주군 · D-2)" in text and "(울산 남구 · D-2)" in text and "(울산 · D-2)" in text
