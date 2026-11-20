@@ -200,6 +200,28 @@ def test_first_run_noise_is_excluded(cfg):
     assert matches("2026학년도 지피지기 취업불패 취업캠프(간호학과) 운영 용역", cfg)
 
 
+def test_afterschool_and_ai_programs(cfg):
+    # 11/20: '교육'이 제목에 없는 방과후·AI·코딩 운영, AI·과학 캠프도 모은다
+    for title in [
+        "2027학년도 방과후학교 프로그램 위탁 운영",
+        "2026 늘봄학교 특강 강사 운영 용역",
+        "3학년 생성형 AI 진로체험 운영",
+        "초등 코딩 체험 프로그램 운영",
+        "2026 겨울방학 AI 캠프 운영 용역",
+        "청소년 과학 캠프 위탁 운영",
+    ]:
+        assert matches(title, cfg), title
+    # 운영이 아니라 구축·물품인 것은 그대로 뺀다
+    for title in [
+        "AI 융합형 교육실 구축",
+        "AI 학습 플랫폼 구축 용역",
+        "방과후 교실 에어컨 설치",
+        "AI 디지털교과서 구입",
+        "K-pop 송캠프 운영",
+    ]:
+        assert not matches(title, cfg), title
+
+
 def test_hidden_price_is_unknown():
     assert to_bid(item("X", "취업캠프", price="1000")).price is None
 

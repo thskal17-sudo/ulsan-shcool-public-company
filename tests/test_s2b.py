@@ -40,7 +40,8 @@ def test_camp_word_needs_a_career_word(cfg):
 
 def test_education_topic(cfg):
     assert topic_of("2026 공무원 청렴 교육 위탁 운영", cfg) == TOPIC_EDU
-    assert topic_of("내성초 AI 메이커 WITH 로보틱스 캠프 운영 견적요청", cfg) is None  # 캠프만 → 아님
+    # 11/20: 'AI' 가 교육 단어가 되어 AI 캠프도 모은다 (전에는 '캠프만 → 아님')
+    assert topic_of("내성초 AI 메이커 WITH 로보틱스 캠프 운영 견적요청", cfg) == TOPIC_EDU
     assert topic_of("가천대학교 AI부트캠프 사업 생성형 AI 심화 교육 기획·운영 위탁 용역", cfg) == TOPIC_EDU
     assert topic_of("부산광역시교육청 진로교육 프로그램 운영", cfg) == TOPIC_CORE  # 진로가 먼저
     assert topic_of("부산광역시교육청 학생 코딩 교육 운영", cfg) == TOPIC_EDU  # 교육청을 빼도 '교육'이 남음
