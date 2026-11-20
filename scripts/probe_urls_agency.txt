@@ -1,0 +1,21 @@
+# 국가 산하기관 자체 입찰 게시판 후보 (2026-11-20). --direct 로 해외(GitHub) 서버에서 바로 접속되는지 확인
+# 한국과학창의재단 (kofac → kosac 로 옮긴 것으로 보임)
+https://www.kosac.re.kr/robots.txt
+https://www.kosac.re.kr/menus/275/boards/403/posts
+https://www.kosac.re.kr/menus/274/bns
+https://www.kofac.re.kr/robots.txt
+https://www.kofac.re.kr/brd/board/403/L/menu/275
+# 공공기관 입찰 모음
+https://www.alio.go.kr/robots.txt
+https://www.alio.go.kr/occasional/bidList.do
+# 창업진흥원
+https://www.kised.or.kr/robots.txt
+https://www.kised.or.kr/board.es?mid=a10303000000&bid=0005
+# 한국청년기업가정신재단
+https://koef.or.kr/robots.txt
+https://koef.or.kr/board/notice_list.php
+# 한국청소년활동진흥원
+https://www.kywa.or.kr/robots.txt
+https://www.kywa.or.kr/pressinfo/bid_list.jsp
+# 한국고용정보원
+https://www.keis.or.kr/robots.txt

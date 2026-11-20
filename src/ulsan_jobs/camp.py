@@ -1,5 +1,5 @@
-"""캠프·교육 수주 공고: 나라장터 용역 입찰공고와 S2B 학교장터 견적요청에서 진로·취업·창업 캠프와
-교육 운영 공고를 골라 메일로 보낸다. (S2B 수집은 s2b.py)
+"""캠프·교육 수주 공고: 나라장터 용역 입찰공고와 S2B 학교장터 견적요청, 국가 산하기관 자체 입찰 게시판에서
+진로·취업·창업 캠프와 교육 운영 공고를 골라 메일로 보낸다. (S2B 수집은 s2b.py, 기관 게시판은 agency.py)
 
 조달청_나라장터 입찰공고정보서비스 (공공데이터포털 15129394)
     목록  GET {BASE}/getBidPblancListInfoServc?inqryDiv=1&inqryBgnDt=YYYYMMDDHHMM&inqryEndDt=...&type=json
@@ -112,6 +112,7 @@ class CampConfig:
     edu_ignore: list[str] = field(default_factory=list)
     edu_exclude: list[str] = field(default_factory=list)
     s2b: dict = field(default_factory=dict)
+    agencies: dict = field(default_factory=dict)
 
 
 def load_camp_config(config_dir: Path = DEFAULT_CONFIG_DIR) -> CampConfig:
@@ -129,6 +130,7 @@ def load_camp_config(config_dir: Path = DEFAULT_CONFIG_DIR) -> CampConfig:
         edu_ignore=[str(w) for w in (data.get("education") or {}).get("ignore", [])],
         edu_exclude=[str(w) for w in (data.get("education") or {}).get("exclude", [])],
         s2b=dict(data.get("s2b") or {}),
+        agencies=dict(data.get("agencies") or {}),
     )
 
 
@@ -513,6 +515,9 @@ class CampOutcome:
     s2b_scanned: int = 0  # 기간 안 S2B 용역 견적요청 수
     s2b_matched: int = 0
     s2b_calls: int = 0
+    agency_scanned: int = 0  # 기관 게시판에서 기간 안 글 수
+    agency_matched: int = 0
+    agency_calls: int = 0
     errors: list[str] = field(default_factory=list)  # 수집이 실패한 곳 (메일 아래에 표시)
     mailed: bool = False
 
@@ -584,10 +589,11 @@ def run_camp(
     lookback_days: int | None = None,
     recheck: bool = False,
     s2b_client=None,
+    agency_client=None,
 ) -> CampOutcome:
     """recheck: 아직 메일로 알리지 않은 공고의 참가가능지역을 저장된 값 대신 다시 조회한다.
 
-    나라장터와 S2B 중 한 곳이 실패해도 다른 곳은 모아서 알린다 (둘 다 실패하면 G2BError)."""
+    나라장터·S2B·기관 게시판 중 한 곳이 실패해도 다른 곳은 모아서 알린다 (모두 실패하면 G2BError)."""
     cfg = load_camp_config(config_dir)
     now = now or now_kst()
     now_naive = now.replace(tzinfo=None)
@@ -615,6 +621,12 @@ def run_camp(
             except Exception as exc:  # noqa: BLE001 - S2B 가 막혀도 나라장터 공고는 알린다
                 log.exception("S2B 수집 실패")
                 out.errors.append(f"S2B: {type(exc).__name__}: {exc}"[:300])
+            store.commit()
+        if cfg.agencies.get("enabled"):
+            from . import agency
+
+            # 기관 게시판은 곳마다 따로 센다 (한 곳이 막혀도 나머지는 읽음)
+            tried += agency.collect_agencies(store, cfg, now, agency_client, out, diag)
             store.commit()
         if len(out.errors) >= tried:
             raise G2BError(" / ".join(out.errors))
@@ -728,7 +740,7 @@ def camp_html(out: CampOutcome, cfg: CampConfig) -> str:
     small = f"{cfg.small_max // 10_000:,}만원"
     parts = [
         "<div style=\"font-family:'Malgun Gothic',sans-serif;font-size:14px;color:#222\">",
-        f"<h2 style='margin:0 0 8px'>캠프·교육 수주 공고 (나라장터·S2B) {out.now.date().isoformat()}</h2>",
+        f"<h2 style='margin:0 0 8px'>캠프·교육 수주 공고 ({_sources_label(cfg)}) {out.now.date().isoformat()}</h2>",
         f"<p>새 공고 <b>{len(out.new)}</b>건 (바로지원 {_count(out.new, TIER_GO)} · 검토 {_count(out.new, TIER_REVIEW)}"
         f" · 참고 {_count(out.new, TIER_REF)})</p>",
         "<p style='margin:0 0 6px;color:#555;font-size:13px'>표마다 진로·취업·창업 공고가 먼저, "
@@ -739,7 +751,7 @@ def camp_html(out: CampOutcome, cfg: CampConfig) -> str:
         "★ 바로지원", f"{home} 또는 지역 제한 없음 + 수의계약이거나 추정가격 {small} 이하", by_tier[TIER_GO], out.now
     ))
     parts.append(_bid_table(
-        "검토", "참가 가능 지역이지만 금액이 큰 입찰, 또는 참가지역을 읽지 못한 공고 (원문 확인)", by_tier[TIER_REVIEW],
+        "검토", "참가 가능 지역이지만 금액이 큰 입찰, 참가지역을 읽지 못한 공고, 금액·마감을 읽지 못한 기관 입찰 (원문 확인)", by_tier[TIER_REVIEW],
         out.now,
     ))
     parts.append(_bid_table(
@@ -763,10 +775,19 @@ def camp_html(out: CampOutcome, cfg: CampConfig) -> str:
     parts.append(
         "<p style='color:#888;font-size:12px;margin-top:16px'>"
         f"나라장터 용역 공고 {out.scanned:,}건 중 {out.matched}건, S2B 학교 용역 견적 {out.s2b_scanned:,}건 중"
-        f" {out.s2b_matched}건이 키워드에 맞았습니다."
+        f" {out.s2b_matched}건"
+        + (f", 기관 게시판 글 {out.agency_scanned:,}건 중 {out.agency_matched}건" if cfg.agencies.get("enabled") else "")
+        + "이 키워드에 맞았습니다."
         " 키워드는 config/camp.yaml 에서 바꿀 수 있습니다. 이 메일은 GitHub Actions 에서 자동 발송됩니다.</p></div>"
     )
     return "".join(parts)
+
+
+def _sources_label(cfg: CampConfig) -> str:
+    names = ["나라장터"] + (["S2B"] if cfg.s2b.get("enabled") else [])
+    if cfg.agencies.get("enabled") and cfg.agencies.get("boards"):
+        names.append("기관 입찰")
+    return "·".join(names)
 
 
 def camp_text(out: CampOutcome) -> str:

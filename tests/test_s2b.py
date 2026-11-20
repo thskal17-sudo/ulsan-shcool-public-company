@@ -226,6 +226,13 @@ class BrokenG2B(NoG2B):
         raise G2BError("인증키 오류")
 
 
+class BrokenAgency:
+    calls = 0
+
+    def get(self, url, encoding=""):
+        raise ConnectionError("기관 홈페이지 접속 안 됨")
+
+
 class BrokenS2B(FakeS2B):
     def list_page(self, region, start, end, page):
         raise RuntimeError("S2B 점검 중")
@@ -237,9 +244,10 @@ def test_one_source_failing_does_not_stop_the_other(tmp_path):
     assert [b.bid_no for b in out.new] == ["S2B-1"]
     assert out.errors == ["나라장터: 인증키 오류"]
     assert "읽지 못한 곳" in camp.camp_html(out, load_camp_config(ROOT / "config"))
+    # 나라장터·S2B·기관 게시판이 모두 실패하면 실행 실패로 알린다
     with pytest.raises(G2BError):
         run_camp(db_path=tmp_path / "q.db", send_mail=False, config_dir=ROOT / "config", now=NOW,
-                 client=BrokenG2B(), s2b_client=BrokenS2B({}, {}))
+                 client=BrokenG2B(), s2b_client=BrokenS2B({}, {}), agency_client=BrokenAgency())
 
 
 def test_old_db_without_new_columns_still_works(tmp_path):
