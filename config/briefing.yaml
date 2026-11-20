@@ -17,6 +17,8 @@ gangsaitda:
   # GitHub Secret GANGSAITDA_IMPORT_TOKEN (사이트 Vercel 의 JOB_IMPORT_TOKEN 과 같은 값)이 있을 때만 보낸다. 비우면 보내지 않는다.
   import_url: "https://www.gangsaitda.com/api/jobs/import"
   share_max: 10  # 공유 글에 넣을 공고 수 (나머지는 '외 N건')
+# 캠프·교육 수주 공고 기록: 2026-11 에 edu-bid-alert 저장소로 옮김 (그 저장소 state 브랜치의 bids.db)
+camp_db: https://raw.githubusercontent.com/thskal17-sudo/edu-bid-alert/state/bids.db
 # 월요일 브리핑에 넣을 캠프 영업 현황 문서
 weekly_links:
   - label: 캠프 영업 현황 (이번 주 제안서 20곳은 월요일 아침 문서로 도착)

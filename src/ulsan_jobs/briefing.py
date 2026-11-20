@@ -4,7 +4,7 @@
     ulsan_db   울산(또는 같은 구조의 부산) 수집 기록 DB — 오늘 메일로 알린 신규, 마감임박, 수집 이상
                이 저장소는 state 브랜치에서 복원한 로컬 DB(--db), 다른 저장소는 raw 주소로 내려받는다.
     md_report  경남·대학평생교육원 저장소가 매일 커밋하는 reports/YYYY-MM-DD.md
-    (캠프 수주는 이 저장소 DB 의 camp_bids / camp_runs)
+    camp_db    캠프 수주: 2026-11 부터 edu-bid-alert 저장소 state 브랜치의 bids.db (camp_bids / camp_runs)
 
 강사잇다 운영 (config/briefing.yaml 의 gangsaitda, 9/29 추가)
     합본 엑셀  울산 DB 의 마감 전 공고 + 경남·평생교육원 저장소가 매일 커밋하는 reports/gangsaitda/latest.xlsx
@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -35,6 +36,8 @@ import yaml
 from .config import DEFAULT_CONFIG_DIR
 from .dates import dday_label
 from .models import now_kst
+
+log = logging.getLogger(__name__)
 
 WEEKDAYS = "월화수목금토일"
 
@@ -296,7 +299,18 @@ def gather(cfg: dict, today: date, local_db: Path | None, fetch) -> Briefing:
             sec.ready = True  # 오류도 '도착'으로 보고 브리핑에 표시한다
         sec.new, sec.closing = _by_deadline(sec.new), _by_deadline(sec.closing)
         sections.append(sec)
-    camp = read_camp_db(local_db, today, soon) if local_db and local_db.exists() else CampSummary()
+    camp = CampSummary()
+    camp_url = cfg.get("camp_db")
+    if camp_url:
+        try:
+            body = fetch(camp_url)
+            if body is not None:
+                tmp = Path(tempfile.mkdtemp()) / "bids.db"
+                tmp.write_bytes(body)
+                camp = read_camp_db(tmp, today, soon)
+        except Exception as exc:  # noqa: BLE001 — 캠프 DB 가 깨져도 강사 공고는 보낸다
+            log.warning("캠프 수주 DB 읽기 실패: %s", exc)
+            camp = CampSummary(ready=True)  # 기다리지 않게 '도착'으로 보고 빈 채로 보낸다
     links = cfg.get("weekly_links", []) if today.weekday() == 0 else []
     return Briefing(today=today, sections=sections, camp=camp, links=links)
 
