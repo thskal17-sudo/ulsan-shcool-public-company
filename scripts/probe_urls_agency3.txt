@@ -1,0 +1,5 @@
+# 3차: ALIO 입찰 목록 자료 주소(JS), 창업진흥원 목록 구조, 이용약관·저작권
+https://www.alio.go.kr/occasional/bidList.do
+https://www.kised.or.kr/board.es?mid=a10303000000&bid=0005
+https://www.alio.go.kr/notice/copyright.do
+https://www.kosac.re.kr/menus/356/info/siteMap/356
