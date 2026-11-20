@@ -16,6 +16,7 @@ robots.txt 가 게시판 주소를 막으면 읽지 않고 메일 아래 '읽지
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import re
 import time as _time
@@ -52,6 +53,7 @@ class Board:
     detail: bool = True  # 키워드에 맞은 공고의 상세 화면을 열어 금액·마감을 찾는다
     encoding: str = ""  # 응답 글자 인코딩을 강제할 때 (예: euc-kr)
     skip_url: str = ""  # 상세 주소가 이 정규식에 맞는 글은 건너뜀 (예: 나라장터로 바로 가는 글 → 나라장터 수집에서 이미 받음)
+    kind: str = "board"  # board: 표 게시판 / alio: ALIO 공공기관 입찰공고 목록(JSON)
 
 
 def boards_of(cfg: CampConfig) -> list[Board]:
@@ -64,6 +66,7 @@ def boards_of(cfg: CampConfig) -> list[Board]:
             pages=int(b.get("pages", 1)), options=dict(b.get("options") or {}),
             title_must=str(b.get("title_must") or ""), detail=bool(b.get("detail", True)),
             encoding=str(b.get("encoding") or ""), skip_url=str(b.get("skip_url") or ""),
+            kind=str(b.get("kind") or "board"),
         ))
     return out
 
@@ -273,10 +276,13 @@ def collect_agencies(store: CampStore, cfg: CampConfig, now: datetime, client: A
     client = client or AgencyClient()
     info: dict = {}
     for board in boards:
-        stat = {"rows": 0, "matched": 0, "new": 0, "detail_errors": 0}
-        info[board.name] = stat
+        stat = {"name": board.name, "rows": 0, "matched": 0, "new": 0, "duplicates": 0, "detail_errors": 0}
+        info[board.id] = stat
         try:
-            _collect_board(board, store, cfg, now, client, out, stat)
+            if board.kind == "alio":
+                _collect_alio(board, store, cfg, now, client, out, stat)
+            else:
+                _collect_board(board, store, cfg, now, client, out, stat)
         except RobotsBlocked as exc:
             log.warning("%s: %s", board.name, exc)
             stat["error"] = "robots.txt 가 수집을 막음"
@@ -313,13 +319,100 @@ def _collect_board(board: Board, store: CampStore, cfg: CampConfig, now: datetim
         seen.update(r.key for r in fresh)
         stat["rows"] += len(fresh)
         for r in fresh:
-            _handle_row(r, board, store, cfg, now, client, out, stat, since)
+            item = Item(key=short_key(r.key), title=r.title, url=r.url, posted=r.posted, deadline=r.deadline,
+                        org=board.name, detail_ok=r.detail_ok)
+            _handle_item(item, board, store, cfg, now, client, out, stat, since)
         if not fresh or all(r.posted and r.posted < since for r in fresh):
             break
 
 
-def _handle_row(r: BoardRow, board: Board, store: CampStore, cfg: CampConfig, now: datetime,
-                client: AgencyClient, out: CampOutcome, stat: dict, since: date) -> None:
+# ALIO 공공기관 경영정보 공개시스템 입찰공고 (모든 공공기관 입찰을 한곳에 모은 목록, 최근 순, 한 쪽 10건)
+#   목록 GET https://www.alio.go.kr/occasional/findBidList.json?pageNo=N
+#        → {"status":"success","data":{"result":[{rtitle, pname, bidInfoEndDt 'YYYY.MM.DD', bdate, seq}], "page":{totalPage}}}
+#   상세 https://www.alio.go.kr/occasional/bidDtl.do?seq=N
+#   11/20 확인: GitHub 서버에서 바로 접속됨, robots.txt 'Allow: /', 저작권정책: 공공데이터로 자유 이용(영리 포함) 가능.
+#   대부분 나라장터에도 올라온 공고라서, 제목에 나라장터 공고번호(R26BK…)가 있거나 이미 모은 공고와 제목이 같으면 뺀다.
+ALIO_DETAIL = "https://www.alio.go.kr/occasional/bidDtl.do?seq={seq}"
+G2B_NO = re.compile(r"\b[R]\d{2}[A-Z]{2}\d{6,}")
+
+
+def parse_alio(text: str) -> tuple[list[dict], int]:
+    data = json.loads(text)
+    if data.get("status") != "success":
+        raise RuntimeError(f"ALIO 응답 오류: {str(data.get('message') or data)[:200]}")
+    body = data.get("data") or {}
+    page = body.get("page") or {}
+    return [r for r in (body.get("result") or []) if isinstance(r, dict)], int(page.get("totalPage") or 1)
+
+
+def _alio_date(text) -> date | None:
+    m = re.search(r"(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})", str(text or ""))
+    try:
+        return date(int(m[1]), int(m[2]), int(m[3])) if m else None
+    except ValueError:
+        return None
+
+
+def _collect_alio(board: Board, store: CampStore, cfg: CampConfig, now: datetime, client: AgencyClient,
+                  out: CampOutcome, stat: dict) -> None:
+    today = now.replace(tzinfo=None).date()
+    first = not store.conn.execute("SELECT 1 FROM camp_bids WHERE bid_no LIKE ? LIMIT 1",
+                                   (f"{board.id}-%",)).fetchone()
+    since = today - timedelta(days=cfg.first_lookback_days if first else cfg.lookback_days)
+    max_pages = max(1, board.pages)
+    for page in range(1, max_pages + 1):
+        text, _ = client.get(set_query(board.url, pageNo=page))
+        rows, total = parse_alio(text)
+        if page == 1 and not rows:
+            raise RuntimeError("ALIO 입찰공고 목록이 비어 있음")
+        stat["rows"] += len(rows)
+        for r in rows:
+            seq = str(r.get("seq") or "").strip()
+            title = re.sub(r"\s+", " ", str(r.get("rtitle") or "")).strip()
+            if not seq or not title:
+                continue
+            item = Item(key=seq, title=title, url=ALIO_DETAIL.format(seq=seq), posted=_alio_date(r.get("bdate")),
+                        deadline=_alio_date(r.get("bidInfoEndDt")), org=str(r.get("pname") or "").strip(),
+                        detail_ok=True)
+            _handle_item(item, board, store, cfg, now, client, out, stat, since)
+        dates = [d for d in (_alio_date(r.get("bdate")) for r in rows) if d]
+        # 최근 순이라 이 쪽의 가장 오래된 글이 기간 밖이면 다음 쪽부터는 모두 기간 밖
+        if page >= total or not rows or (dates and min(dates) < since):
+            break
+    else:
+        stat["truncated"] = True  # max_pages 까지 읽고도 기간이 남음 (다음 실행에서 이어 읽지는 않음)
+
+
+@dataclass
+class Item:
+    """게시판 한 줄 또는 ALIO 한 건을 같은 모양으로."""
+    key: str
+    title: str
+    url: str
+    posted: date | None
+    deadline: date | None
+    org: str  # 공고한 기관 (camp_bids.source 로 씀)
+    detail_ok: bool = True
+
+
+def _title_key(title: str) -> str:
+    """제목 비교용: 괄호 속 꼬리표('(수정)', '[재공고]')와 띄어쓰기를 뺀다."""
+    return re.sub(r"[\(\[［【][^\)\]］】]{0,12}[\)\]］】]|\s+", "", title or "")
+
+
+def _duplicate(store: CampStore, title: str, bid_no: str, now: datetime) -> bool:
+    """다른 수집처(나라장터 등)에서 최근 60일 안에 같은 제목의 공고를 모았는가."""
+    key = _title_key(title)
+    if not key:
+        return False
+    cutoff = (now.replace(tzinfo=None) - timedelta(days=60)).date().isoformat()
+    rows = store.conn.execute(
+        "SELECT title FROM camp_bids WHERE bid_no != ? AND first_seen_at >= ?", (bid_no, cutoff))
+    return any(_title_key(r[0]) == key for r in rows)
+
+
+def _handle_item(r: Item, board: Board, store: CampStore, cfg: CampConfig, now: datetime,
+                 client: AgencyClient, out: CampOutcome, stat: dict, since: date) -> None:
     now_naive = now.replace(tzinfo=None)
     if r.posted and r.posted < since:
         return
@@ -331,19 +424,27 @@ def _handle_row(r: BoardRow, board: Board, store: CampStore, cfg: CampConfig, no
         return
     out.agency_matched += 1
     stat["matched"] += 1
-    bid_no = f"{board.id}-{short_key(r.key)}"
+    bid_no = f"{board.id}-{r.key}"
     if store.known(bid_no) is not None:
         return
+    if G2B_NO.search(r.title) or _duplicate(store, r.title, bid_no, now):
+        stat["duplicates"] += 1  # 나라장터에 올라온 공고 → 나라장터 수집에서 이미 받음
+        return
+    org = r.org or board.name
     b = Bid(
-        bid_no=bid_no, bid_ord="", title=r.title, org=board.name, demand_org=board.name,
+        bid_no=bid_no, bid_ord="", title=r.title, org=board.name if board.kind == "alio" else org, demand_org=org,
         posted_at=datetime.combine(r.posted, time()) if r.posted else None,
         close_at=datetime.combine(r.deadline, time(23, 59)) if r.deadline else None,
-        url=r.url, source=board.name, topic=topic,
+        url=r.url, source=org, topic=topic,
     )
     if board.detail and r.detail_ok and r.url:
         try:
             html, _ = client.get(r.url, board.encoding)
-            d = parse_detail_text(detail_text(html), now_naive.date())
+            text = detail_text(html)
+            if G2B_NO.search(text):  # 상세에 나라장터 공고번호가 있으면 나라장터 공고와 같은 것
+                stat["duplicates"] += 1
+                return
+            d = parse_detail_text(text, now_naive.date())
             b.price, b.price_label, b.method = d.price, d.price_label, d.method
             b.close_at = d.close_at or b.close_at
         except Exception as exc:  # noqa: BLE001 - 상세를 못 읽어도 공고는 '검토'로 알린다

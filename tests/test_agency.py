@@ -1,4 +1,5 @@
 """국가 산하기관 자체 입찰 게시판 수집 (agency.py) 시험."""
+import json
 import shutil
 import sqlite3
 from datetime import date, datetime
@@ -330,3 +331,82 @@ def test_crawl_delay_is_respected():
     client.get(LIST_URL)
     client.get(view(9105))
     assert waits == [8.0]  # 앞 요청 뒤 2초 지났으니 8초 더 기다림
+
+
+# ---------------------------------------------------------------- ALIO 공공기관 입찰공고
+
+ALIO_URL = "https://www.alio.go.kr/occasional/findBidList.json"
+
+
+def alio_detail(seq):
+    return f"https://www.alio.go.kr/occasional/bidDtl.do?seq={seq}"
+
+
+ALIO_DETAILS = {
+    alio_detail(3600010): "<div>추정가격 : 18,000,000원 / 계약방법 : 수의계약 / 견적서 제출 마감 : 2026.12.01 17:00</div>",
+    alio_detail(3600009): "<div>운영기관 모집 공고. 자세한 사항은 첨부 공고문 참고</div>",
+    # 상세에 나라장터 공고번호가 있음 → 나라장터 공고와 같은 것
+    alio_detail(3600006): "<div>나라장터 공고번호 R26BK01800001-000 참고</div>",
+}
+
+
+@pytest.fixture
+def alio_config(tmp_path):
+    d = tmp_path / "config"
+    shutil.copytree(ROOT / "config", d)
+    data = yaml.safe_load((d / "camp.yaml").read_text(encoding="utf-8"))
+    data["s2b"]["enabled"] = False
+    data["agencies"] = {"enabled": True, "boards": [
+        {"name": "ALIO 공공기관 입찰", "id": "ALIO", "kind": "alio", "url": ALIO_URL, "pages": 5},
+    ]}
+    (d / "camp.yaml").write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    return d
+
+
+def alio_client():
+    page1 = (FIXTURES / "alio_bid_list.json").read_text(encoding="utf-8")
+    return FakeAgency(pages={f"{ALIO_URL}?pageNo=1": page1}, details=ALIO_DETAILS)
+
+
+class G2BWith(NoG2B):
+    """나라장터에서 '디지털새싹 캠프 운영 용역' 을 이미 받은 상태."""
+
+    def list_services(self, begin, end):
+        return [{"bidNtceNo": "R26BK01811111", "bidNtceOrd": "000", "bidNtceNm": "디지털새싹 캠프 운영 용역",
+                 "ntceInsttNm": "시험진흥원", "dminsttNm": "시험진흥원", "bidNtceDt": "2026-11-19 10:00:00",
+                 "bidClseDt": "2026-11-27 10:00:00", "presmptPrce": "50000000", "cntrctCnclsMthdNm": "제한경쟁",
+                 "ntceKindNm": "등록", "bidNtceDtlUrl": "https://www.g2b.go.kr/link/R26BK01811111"}]
+
+
+def test_alio_bids_go_to_db_with_agency_name(alio_config, tmp_path):
+    db = tmp_path / "p.db"
+    client = alio_client()
+    out = run_camp(db_path=db, send_mail=False, config_dir=alio_config, now=NOW, client=G2BWith(),
+                   agency_client=client)
+
+    alio = {b.bid_no: b for b in out.new if b.bid_no.startswith("ALIO-")}
+    assert {k: v.tier for k, v in alio.items()} == {
+        "ALIO-3600010": TIER_GO,  # 수의계약 1,800만원, 마감 있음
+        "ALIO-3600009": TIER_REVIEW,  # 금액 모름
+    }
+    b = alio["ALIO-3600010"]
+    # source 는 공고한 기관 이름, 공고 게시처는 ALIO
+    assert (b.source, b.demand_org, b.org) == ("한국청소년정책시험원", "한국청소년정책시험원", "ALIO 공공기관 입찰")
+    assert b.close_at == datetime(2026, 12, 1, 17, 0) and b.url == alio_detail(3600010)
+    # 나라장터와 겹치는 것: 제목에 공고번호(3600008), 같은 제목(3600007), 상세에 공고번호(3600006)
+    stat = json.loads(sqlite3.connect(db).execute("SELECT diag FROM camp_runs").fetchone()[0])["agencies"]["ALIO"]
+    assert stat["duplicates"] == 3 and stat["name"] == "ALIO 공공기관 입찰"
+    # 11/1 글(처음 실행 10일보다 이전)은 보지 않고, 그 쪽에서 읽기를 멈춘다
+    assert client.fetched.count(f"{ALIO_URL}?pageNo=1") == 1 and f"{ALIO_URL}?pageNo=2" not in client.fetched
+    assert out.agency_scanned == 6
+    # 나라장터에서 받은 공고는 그대로 한 번만
+    assert [x.bid_no for x in out.new if x.title.endswith("디지털새싹 캠프 운영 용역")] == ["R26BK01811111"]
+
+
+def test_parse_alio_error():
+    from ulsan_jobs.agency import parse_alio
+
+    with pytest.raises(RuntimeError):
+        parse_alio('{"status":"fail","message":"점검 중"}')
+    rows, pages = parse_alio((FIXTURES / "alio_bid_list.json").read_text(encoding="utf-8"))
+    assert len(rows) == 7 and pages == 3

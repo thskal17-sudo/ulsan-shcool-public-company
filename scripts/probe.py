@@ -333,6 +333,37 @@ def page_info_report(url: str) -> None:
     print(f"  info={extract_info(None, block_text(soup))}")
 
 
+def agencies_report() -> int:
+    """기관 입찰 게시판 시험 수집: 임시 DB 에 처음 실행처럼 모아 등급별로 보여준다."""
+    import json
+    import tempfile
+
+    from ulsan_jobs import agency
+    from ulsan_jobs.camp import CampOutcome, CampStore, load_camp_config
+    from ulsan_jobs.models import now_kst
+
+    logging.basicConfig(level=logging.INFO, format="  [%(levelname)s] %(message)s")
+    cfg = load_camp_config(ROOT / "config")
+    now = now_kst()
+    with tempfile.TemporaryDirectory() as tmp:
+        store = CampStore(Path(tmp) / "t.db")
+        out, diag = CampOutcome(now=now), {}
+        agency.collect_agencies(store, cfg, now, None, out, diag)
+        rows = store.conn.execute("SELECT * FROM camp_bids ORDER BY tier, close_at").fetchall()
+        print(f"기관 게시판 글 {out.agency_scanned}건 · 키워드 일치 {out.agency_matched}건 · 저장 {len(rows)}건"
+              f" · 요청 {out.agency_calls}회")
+        for name, stat in diag.get("agencies", {}).items():
+            print(f"  {name}: {json.dumps(stat, ensure_ascii=False)}")
+        for err in out.errors:
+            print(f"  ⚠ {err}")
+        for r in rows:
+            print(f"  [{r['tier']}] {r['source']} | {r['title']} | 마감 {r['close_at'] or '-'}"
+                  f" | {r['price'] or '-'} {r['price_label'] or ''} | {r['method'] or '-'} | {r['topic']}")
+            print(f"      {r['url']}")
+        store.close()
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--detail", nargs="*", default=None, help="상세 구조를 볼 소스 id")
@@ -355,6 +386,8 @@ def main() -> int:
     parser.add_argument("--attach-template", default=None, help="--attach 에서 쓸 첨부 주소 틀 (sources.yaml 의 attachment_template)")
     parser.add_argument("--direct", action="store_true",
                         help="국내 중계(KR_PROXY_URL)를 쓰지 않고 해외(GitHub) 서버에서 바로 접속해 본다")
+    parser.add_argument("--agencies", action="store_true",
+                        help="config/camp.yaml 의 기관 입찰 게시판을 임시 DB 로 시험 수집해 결과만 출력 (메일·state DB 안 건드림)")
     parser.add_argument("--page-info", action="store_true", help="--url(상세 페이지) 본문 글자로 찾은 강사잇다 칸만 출력")
     args = parser.parse_args()
     global RAW, RAW_FROM, GREP, FOLLOW_JS, FORM_POST
@@ -382,6 +415,8 @@ def main() -> int:
 
         for url in args.url:
             HTTP.allow_legacy_tls(urlsplit(url).hostname or "")
+    if args.agencies:
+        return agencies_report()
     if args.attach:
         for url in args.url:
             attach_report(url, args.attach_template, args.around)

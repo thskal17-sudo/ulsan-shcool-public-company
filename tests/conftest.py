@@ -61,8 +61,11 @@ class _NoAgency:
     def __init__(self, *args, **kwargs):
         self.calls = 0
 
+    EMPTY_JSON = ('{"status":"success","data":{"result":[{"rtitle":"청사 시설 점검","pname":"시험공사",'
+                  '"bidInfoEndDt":"2020.01.10","bdate":"2020.01.01","seq":1}],"page":{"totalPage":1}}}')
+
     def get(self, url, encoding=""):
-        return self.EMPTY, url
+        return (self.EMPTY_JSON if ".json" in url else self.EMPTY), url
 
 
 @pytest.fixture(autouse=True)

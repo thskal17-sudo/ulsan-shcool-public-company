@@ -39,9 +39,19 @@ s2b:
 #     한국청년기업가정신재단(koef.or.kr, Crawl-delay 10초)      → 수집 (공지 게시판이라 입찰·공모 제목만)
 #     한국고용정보원(keis.or.kr)                               → robots.txt 가 입찰 목록을 막음 → 수집 안 함
 #     한국청소년활동진흥원(kywa.or.kr)                          → 입찰은 나라장터에 올림 → 나라장터 수집으로 충분
+#     창업진흥원(kised.or.kr)                                   → 상세에 '나라장터 링크 참고' → 나라장터 수집으로 충분
+#     ALIO(alio.go.kr) 공공기관 입찰공고 목록                   → 수집 (JSON, 나라장터와 겹치는 공고는 뺌)
 agencies:
   enabled: true
   boards:
+    # ALIO 공공기관 입찰공고: 모든 공공기관 입찰을 한곳에 모은 목록 (하루 70건 안팎, 한 쪽 10건).
+    # 나라장터에도 올라온 공고(제목·상세에 나라장터 공고번호가 있거나 제목이 같은 것)는 뺀다.
+    # robots.txt 'Allow: /', 저작권정책: 공공데이터 자유 이용(영리 포함) 가능 (11/20 확인)
+    - name: ALIO 공공기관 입찰
+      id: ALIO
+      kind: alio
+      url: https://www.alio.go.kr/occasional/findBidList.json
+      pages: 80  # 처음 실행(10일치)도 읽을 수 있게. 평소(2일치)는 15쪽 안팎에서 멈춤
     # 공모·협약형 사업(방과후 프로그램 공급, AI·코딩 프로그램 운영 기관 모집 등). 나라장터에 안 올라옴
     - name: 한국과학창의재단
       id: KOSAC-사업
