@@ -1,11 +1,12 @@
 name: 오늘의 브리핑
 
 # 지역별 강사 공고 메일(울산·경남·대학평생교육원)과 캠프 수주 메일을 한 통으로 묶어 BRIEFING_TO 로 보낸다.
+# 캠프 수주 기록은 2026-11 부터 edu-bid-alert 저장소에서 읽는다 (config/briefing.yaml 의 camp_db).
 # 기존 지역별 메일은 그대로 나간다. 하루 한 번만 보낸다 (보낸 날짜는 briefing-state 브랜치에 보관).
 on:
   # 이 저장소의 수집이 끝날 때마다 확인: 모든 곳의 오늘 자료가 모였으면 바로 보낸다
   workflow_run:
-    workflows: ["매일 강사 공고 수집·메일 발송", "캠프·교육 수주 공고 (나라장터·S2B)"]
+    workflows: ["매일 강사 공고 수집·메일 발송"]
     types: [completed]
   # 경남·평생교육원 보고서가 나중에 도착하는 날을 위한 예비 확인 (GitHub 예약은 몇 시간씩 밀릴 수 있음).
   # 08:00 KST 가 지나면 도착한 것만으로 보낸다 (config/briefing.yaml 의 send_anyway_after).

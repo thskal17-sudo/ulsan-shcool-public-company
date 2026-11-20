@@ -24,26 +24,6 @@ def rules():
     return load_rules(ROOT / "config")
 
 
-class _NoS2B:
-    """테스트 중에는 S2B 에 실제로 접속하지 않는다 (목록 0건)."""
-
-    def __init__(self, *args, **kwargs):
-        self.calls = 0
-
-    def list_page(self, region, start, end, page):
-        return [], 1
-
-    def detail(self, code, kind):
-        raise AssertionError("상세 조회가 일어나면 안 됨")
-
-
-@pytest.fixture(autouse=True)
-def _offline_s2b(monkeypatch):
-    from ulsan_jobs import s2b
-
-    monkeypatch.setattr(s2b, "S2BClient", _NoS2B)
-
-
 @pytest.fixture(autouse=True)
 def _no_neis(monkeypatch):
     """시험은 나이스(학교 주소)에 실제로 접속하지 않는다. 필요한 시험은 school_district.neis_addresses 를 다시 바꾼다."""

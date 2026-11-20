@@ -1,5 +1,8 @@
 import json
+import sqlite3
+import tempfile
 from datetime import date, datetime
+from pathlib import Path
 
 from ulsan_jobs.briefing import (
     Briefing,
@@ -13,7 +16,6 @@ from ulsan_jobs.briefing import (
     should_send,
     subject_line,
 )
-from ulsan_jobs.camp import Bid, CampStore
 from ulsan_jobs.models import KST, Posting, SourceResult
 from ulsan_jobs.storage import Store
 
@@ -78,17 +80,42 @@ def _db(tmp_path):
     store.mark_reported([p2.uid], datetime(2026, 9, 29, 7, 0, tzinfo=KST))
     store.log_runs([SourceResult("s1", "울산초 게시판", state="정상"), SourceResult("s2", "구청", state="오류")], NOW)
     store.close()
-    camp = CampStore(db)
-    b = Bid("R1", "000", "진로캠프 운영", demand_org="부산고", price=12_000_000, price_label="추정가격",
-            close_at=datetime(2026, 10, 6, 10, 0), url="https://g2b/1", regions=[], tier="바로지원")
-    camp.save(b, NOW)
-    camp.mark_reported(["R1"], NOW)
-    camp.conn.execute("INSERT INTO camp_runs VALUES (?, 1, 1, 1, 1, 0, '{}')", (NOW.isoformat(),))
-    camp.close()
     return db
 
 
+CAMP_DB_URL = "https://raw.githubusercontent.com/thskal17-sudo/edu-bid-alert/state/bids.db"
+
+
+def _camp_db(tmp_path) -> bytes:
+    """edu-bid-alert 저장소 state 브랜치의 bids.db 모양 (camp_bids·camp_runs)."""
+    path = tmp_path / "bids.db"
+    path.unlink(missing_ok=True)
+    conn = sqlite3.connect(path)
+    conn.executescript("""
+        CREATE TABLE camp_bids (bid_no TEXT PRIMARY KEY, bid_ord TEXT, title TEXT NOT NULL, org TEXT,
+            demand_org TEXT, posted_at TEXT, close_at TEXT, price INTEGER, price_label TEXT, method TEXT,
+            regions TEXT, tier TEXT, notice_kind TEXT, url TEXT, first_seen_at TEXT NOT NULL, reported_at TEXT,
+            source TEXT, topic TEXT);
+        CREATE TABLE camp_runs (run_at TEXT NOT NULL, scanned INTEGER, matched INTEGER, new INTEGER,
+            calls INTEGER, errors INTEGER, diag TEXT);
+    """)
+    conn.execute(
+        "INSERT INTO camp_bids (bid_no, bid_ord, title, demand_org, close_at, price, price_label, regions, tier, url,"
+        " first_seen_at, reported_at, source, topic) VALUES"
+        " ('R1', '000', '진로캠프 운영', '부산고', '2026-10-06 10:00', 12000000, '추정가격', '[]', '바로지원',"
+        " 'https://g2b/1', ?, ?, '나라장터', '진로·취업·창업')", (NOW.isoformat(), NOW.isoformat()))
+    conn.execute("INSERT INTO camp_runs VALUES (?, 1, 1, 1, 1, 0, '{}')", (NOW.isoformat(),))
+    conn.commit()
+    conn.close()
+    return path.read_bytes()
+
+
+CAMP_BYTES = _camp_db(Path(tempfile.mkdtemp()))
+
+
 def _fetch(url):
+    if "edu-bid-alert" in url:
+        return CAMP_BYTES
     return REPORT.encode() if "Gyeongnam" in url else None  # 평생교육원은 아직 없음
 
 
@@ -107,6 +134,26 @@ def test_gather_reads_all_sources(tmp_path):
     assert "강사 신규 3건" in subject_line(b) and "캠프 바로지원 1건" in subject_line(b)
     html = html_body(b)
     assert "아직 오늘 자료가 도착하지 않은 곳" in html and "진로캠프 운영" in html
+
+
+def test_camp_comes_from_edu_bid_alert_db(tmp_path):
+    """캠프 수주는 edu-bid-alert 저장소 state 브랜치의 bids.db 에서 읽는다 (이 저장소 DB 가 아님)."""
+    cfg = load_config(ROOT / "config")
+    assert cfg["camp_db"] == CAMP_DB_URL
+    asked = []
+
+    def fetch(url):
+        asked.append(url)
+        return _fetch(url)
+
+    b = gather(cfg, TODAY, _db(tmp_path), fetch)
+    assert CAMP_DB_URL in asked and b.camp.ready and [i.title for i in b.camp.go] == ["진로캠프 운영"]
+
+    # 아직 없으면(첫 실행 전) '미도착'으로 기다리고, 깨진 파일이면 기다리지 않고 빈 채로 보낸다
+    b = gather(cfg, TODAY, _db(tmp_path), lambda url: None if "edu-bid-alert" in url else _fetch(url))
+    assert not b.camp.ready
+    b = gather(cfg, TODAY, _db(tmp_path), lambda url: b"not sqlite" if "edu-bid-alert" in url else _fetch(url))
+    assert b.camp.ready and b.camp.go == []
 
 
 def test_should_send_rules():

@@ -248,7 +248,7 @@ D-day 조건부 서식(D-1 이하 빨강, D-3 이하 주황).
   정시·반시는 예약이 몰려 더 밀리므로 피한다.
 - 예약 실행은 `run --once-daily`: DB `mail_log` 에 그날(KST) '정기' 메일이 있으면 새 공고가 있을 때만
   '보충' 메일을 보내고 없으면 보내지 않는다. 손으로 돌린 실행은 늘 전체 메일을 보낸다.
-- 캠프 수주(`camp.yml`, 02:23·05:23 KST)와 같은 concurrency 그룹(`daily-collect`)이라 차례로 돈다.
+- (캠프 수주 `camp.yml` 은 2026-11 에 [edu-bid-alert](https://github.com/thskal17-sudo/edu-bid-alert) 저장소로 옮김)
   대기 중인 실행이 있을 때 같은 그룹의 실행이 또 들어오면 대기 중인 것이 취소되므로 서로 46분 이상 떼어 둔다.
 
 ### 8.3 상태(DB) 보관 (GitHub Actions 사용 시)
