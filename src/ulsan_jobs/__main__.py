@@ -100,8 +100,6 @@ def cmd_check_source(args) -> int:
 
 
 def cmd_briefing(args) -> int:
-    import os
-
     from .briefing import run_briefing
 
     gha = os.environ.get("GITHUB_ACTIONS") == "true"  # 실행 기록 요약(annotation)에 보이게 남긴다
