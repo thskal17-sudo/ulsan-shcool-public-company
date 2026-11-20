@@ -145,6 +145,7 @@ def test_method_is_left_empty_when_ambiguous():
 def test_short_key():
     assert short_key("https://x.or.kr/notice/view.do?bbsSn=9105") == "9105"
     assert short_key("https://www.kosac.re.kr/menus/275/boards/403/posts/61722") == "61722"
+    assert short_key("https://www.kosac.re.kr/menus/274/bns/PBANC_00000000000519") == "PBANC_00000000000519"
     assert short_key("ARTICLE-77") == "ARTICLE-77"
     assert len(short_key("https://x.or.kr/view?id=abc")) == 12
 
@@ -307,3 +308,25 @@ def test_real_config_boards_are_valid(cfg):
     assert len({b.id for b in boards}) == len(boards)
     for b in boards:
         assert b.name and b.url.startswith("https://")
+
+
+def test_rows_linking_to_g2b_are_skipped(config_dir, tmp_path):
+    """한국과학창의재단 입찰공고처럼 나라장터로 바로 가는 글은 나라장터 수집에서 이미 받으므로 건너뛴다."""
+    html = (FIXTURES / "agency_board.html").read_text(encoding="utf-8").replace(
+        "/notice/view.do?bbsSn=9105&amp;pageIndex=1",
+        "https://www.g2b.go.kr/link/PNPE027_01/single/?bidPbancNo=R26BK01834304&amp;bidPbancOrd=000")
+    data = yaml.safe_load((config_dir / "camp.yaml").read_text(encoding="utf-8"))
+    data["agencies"]["boards"][0]["skip_url"] = r"g2b\.go\.kr"
+    (config_dir / "camp.yaml").write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
+    out = run(config_dir, tmp_path / "p.db", FakeAgency(pages={LIST_URL: html}))
+    assert {b.bid_no for b in out.new} == {"TEST-9104", "TEST-9101"}
+
+
+def test_crawl_delay_is_respected():
+    waits = []
+    clock = iter([0.0, 2.0, 10.0])
+    client = AgencyClient(http=FakeHttp("User-agent: *\nCrawl-delay: 10\n"), sleep=waits.append,
+                          clock=lambda: next(clock))
+    client.get(LIST_URL)
+    client.get(view(9105))
+    assert waits == [8.0]  # 앞 요청 뒤 2초 지났으니 8초 더 기다림

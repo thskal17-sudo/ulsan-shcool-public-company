@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import time as _time
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
 from urllib.parse import parse_qsl, urlsplit
@@ -50,6 +51,7 @@ class Board:
     title_must: str = ""  # 이 정규식에 맞는 제목만 (공지·입찰이 섞인 게시판에서 입찰공고만 고를 때)
     detail: bool = True  # 키워드에 맞은 공고의 상세 화면을 열어 금액·마감을 찾는다
     encoding: str = ""  # 응답 글자 인코딩을 강제할 때 (예: euc-kr)
+    skip_url: str = ""  # 상세 주소가 이 정규식에 맞는 글은 건너뜀 (예: 나라장터로 바로 가는 글 → 나라장터 수집에서 이미 받음)
 
 
 def boards_of(cfg: CampConfig) -> list[Board]:
@@ -61,7 +63,7 @@ def boards_of(cfg: CampConfig) -> list[Board]:
             name=str(b["name"]), id=str(b.get("id") or b["name"]), url=str(b["url"]),
             pages=int(b.get("pages", 1)), options=dict(b.get("options") or {}),
             title_must=str(b.get("title_must") or ""), detail=bool(b.get("detail", True)),
-            encoding=str(b.get("encoding") or ""),
+            encoding=str(b.get("encoding") or ""), skip_url=str(b.get("skip_url") or ""),
         ))
     return out
 
@@ -161,12 +163,17 @@ def detail_text(html: bytes | str) -> str:
 
 
 def short_key(key: str) -> str:
-    """게시글 식별값(주소일 때가 많음) → 공고번호로 쓸 짧은 값. 주소면 그 안의 마지막 글 번호."""
+    """게시글 식별값(주소일 때가 많음) → 공고번호로 쓸 짧은 값.
+
+    주소 끝 칸에 숫자가 있으면 그 칸 (…/posts/62251 → 62251, …/bns/PBANC_00000000000519 → PBANC_00000000000519),
+    아니면 쿼리의 마지막 숫자 값 (view.do?bbsSn=9105 → 9105), 그것도 없으면 주소의 해시."""
     if not key.startswith("http"):
         return key
     parts = urlsplit(key)
+    last = parts.path.rstrip("/").rsplit("/", 1)[-1]
+    if re.search(r"\d", last) and "." not in last:
+        return last
     numbers = [v for _, v in parse_qsl(parts.query) if re.fullmatch(r"\d{2,}", v)]
-    numbers += re.findall(r"(?<![\w])(\d{2,})(?![\w])", parts.path)
     if numbers:
         return numbers[-1]
     return hashlib.sha1(key.encode()).hexdigest()[:12]
@@ -186,15 +193,31 @@ def agency_tier(b: Bid, cfg: CampConfig) -> str:
 
 
 class AgencyClient:
-    def __init__(self, http: Http | None = None):
+    def __init__(self, http: Http | None = None, sleep=_time.sleep, clock=_time.monotonic):
         # 기관 홈페이지는 국내 중계 없이 바로 읽는다 (해외 접속이 되는 곳만 목록에 넣는다)
         self.http = http or Http(min_interval=1.0, max_seconds=60, kr_proxy="")
         self.calls = 0
         self._robots: dict[str, RobotFileParser | None] = {}
+        self._last: dict[str, float] = {}
+        self.sleep, self.clock = sleep, clock
+
+    def _origin(self, url: str) -> str:
+        parts = urlsplit(url)
+        return f"{parts.scheme}://{parts.netloc}"
+
+    def _wait(self, origin: str) -> None:
+        """robots.txt 의 Crawl-delay(예: 한국청년기업가정신재단 10초)만큼 요청 사이를 띄운다."""
+        rp = self._robots.get(origin)
+        delay = (rp.crawl_delay(ROBOTS_AGENT) if rp is not None else None) or 0
+        last = self._last.get(origin)
+        if delay and last is not None:
+            gap = float(delay) - (self.clock() - last)
+            if gap > 0:
+                self.sleep(gap)
+        self._last[origin] = self.clock()
 
     def allowed(self, url: str) -> bool:
-        parts = urlsplit(url)
-        origin = f"{parts.scheme}://{parts.netloc}"
+        origin = self._origin(url)
         if origin not in self._robots:
             self._robots[origin] = self._load_robots(origin)
         rp = self._robots[origin]
@@ -222,12 +245,20 @@ class AgencyClient:
         """(html, 최종 주소). robots.txt 가 막으면 RobotsBlocked."""
         if not self.allowed(url):
             raise RobotsBlocked(f"robots.txt 가 막음: {url}")
+        self._wait(self._origin(url))
         self.calls += 1
         resp = self.http.get(url)
-        if encoding:
-            return resp.content.decode(encoding, errors="replace"), resp.url
-        return resp.content.decode(resp.apparent_encoding if not resp.encoding or resp.encoding.lower() == "iso-8859-1"
-                                    else resp.encoding, errors="replace"), resp.url
+        return decode(resp.content, encoding or resp.encoding), resp.url
+
+
+def decode(content: bytes, encoding: str | None) -> str:
+    """응답 글자 풀기. 서버가 인코딩을 안 알려 주면(ISO-8859-1 기본값) UTF-8, 안 되면 EUC-KR(CP949)."""
+    if encoding and encoding.lower() not in ("iso-8859-1", "latin-1"):
+        return content.decode(encoding, errors="replace")
+    try:
+        return content.decode("utf-8")
+    except UnicodeDecodeError:
+        return content.decode("cp949", errors="replace")
 
 
 # ---------------------------------------------------------------- 수집
@@ -277,7 +308,8 @@ def _collect_board(board: Board, store: CampStore, cfg: CampConfig, now: datetim
         rows = parse_board(html, final_url, opts, today)
         if page == 1 and not rows:
             raise RuntimeError(f"게시판 목록을 읽지 못함 (행 0건): {url}")
-        fresh = [r for r in rows if r.key not in seen]
+        fresh = [r for r in rows if r.key not in seen
+                 and not (board.skip_url and re.search(board.skip_url, r.url or ""))]
         seen.update(r.key for r in fresh)
         stat["rows"] += len(fresh)
         for r in fresh:

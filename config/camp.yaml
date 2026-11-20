@@ -31,6 +31,39 @@ s2b:
   first_lookback_days: 10
   max_pages: 120  # 지역마다 한 번에 읽을 최대 쪽수 (한 쪽 10건)
 
+# 국가 산하기관 자체 입찰·공모 게시판 (11/20 추가, src/ulsan_jobs/agency.py)
+# 나라장터에 올리지 않고 자기 홈페이지에만 올리는 공고를 같은 키워드 규칙으로 모아 camp_bids 에 source=name 으로 넣는다.
+#   금액·마감을 못 읽으면 '검토'. robots.txt 가 막으면 읽지 않고 메일에 '읽지 못한 곳'으로 표시.
+#   11/20 GitHub 서버에서 국내 중계 없이 바로 접속 확인 (scripts/probe_urls_agency*.txt):
+#     한국과학창의재단(kosac.re.kr, robots.txt 없음)          → 수집
+#     한국청년기업가정신재단(koef.or.kr, Crawl-delay 10초)      → 수집 (공지 게시판이라 입찰·공모 제목만)
+#     한국고용정보원(keis.or.kr)                               → robots.txt 가 입찰 목록을 막음 → 수집 안 함
+#     한국청소년활동진흥원(kywa.or.kr)                          → 입찰은 나라장터에 올림 → 나라장터 수집으로 충분
+agencies:
+  enabled: true
+  boards:
+    # 공모·협약형 사업(방과후 프로그램 공급, AI·코딩 프로그램 운영 기관 모집 등). 나라장터에 안 올라옴
+    - name: 한국과학창의재단
+      id: KOSAC-사업
+      url: https://www.kosac.re.kr/menus/274/bns
+      pages: 2
+      options: {page_param: page}
+      # 상세 화면 본문이 스크립트 자료로만 와서 금액을 읽을 수 없음 → 목록의 접수기간(마감)만 쓰고 '검토'로 둔다
+      detail: false
+    # 입찰공고: 대부분 나라장터로 바로 가는 글(나라장터 수집에서 이미 받음)이라 재단 안에서 열리는 글만 본다
+    - name: 한국과학창의재단
+      id: KOSAC-입찰
+      url: https://www.kosac.re.kr/menus/275/boards/403/posts
+      pages: 2
+      options: {page_param: page}
+      skip_url: g2b\.go\.kr
+      detail: false
+    - name: 한국청년기업가정신재단
+      id: KOEF
+      url: https://koef.or.kr/board/notice_list.php
+      # 행사 참가자 모집·결과 공지가 대부분이라 입찰·운영기관 공모 제목만
+      title_must: 입찰|용역|위탁|운영\s*기관|수행\s*기관|운영사|사업자\s*(선정|모집)|제안\s*요청
+
 include:
   - 진로
   - 취업
