@@ -40,7 +40,8 @@ def test_camp_word_needs_a_career_word(cfg):
 
 def test_education_topic(cfg):
     assert topic_of("2026 공무원 청렴 교육 위탁 운영", cfg) == TOPIC_EDU
-    assert topic_of("내성초 AI 메이커 WITH 로보틱스 캠프 운영 견적요청", cfg) is None  # 캠프만 → 아님
+    # 11/20: 'AI' 가 교육 단어가 되어 AI 캠프도 모은다 (전에는 '캠프만 → 아님')
+    assert topic_of("내성초 AI 메이커 WITH 로보틱스 캠프 운영 견적요청", cfg) == TOPIC_EDU
     assert topic_of("가천대학교 AI부트캠프 사업 생성형 AI 심화 교육 기획·운영 위탁 용역", cfg) == TOPIC_EDU
     assert topic_of("부산광역시교육청 진로교육 프로그램 운영", cfg) == TOPIC_CORE  # 진로가 먼저
     assert topic_of("부산광역시교육청 학생 코딩 교육 운영", cfg) == TOPIC_EDU  # 교육청을 빼도 '교육'이 남음
@@ -225,6 +226,13 @@ class BrokenG2B(NoG2B):
         raise G2BError("인증키 오류")
 
 
+class BrokenAgency:
+    calls = 0
+
+    def get(self, url, encoding=""):
+        raise ConnectionError("기관 홈페이지 접속 안 됨")
+
+
 class BrokenS2B(FakeS2B):
     def list_page(self, region, start, end, page):
         raise RuntimeError("S2B 점검 중")
@@ -236,9 +244,10 @@ def test_one_source_failing_does_not_stop_the_other(tmp_path):
     assert [b.bid_no for b in out.new] == ["S2B-1"]
     assert out.errors == ["나라장터: 인증키 오류"]
     assert "읽지 못한 곳" in camp.camp_html(out, load_camp_config(ROOT / "config"))
+    # 나라장터·S2B·기관 게시판이 모두 실패하면 실행 실패로 알린다
     with pytest.raises(G2BError):
         run_camp(db_path=tmp_path / "q.db", send_mail=False, config_dir=ROOT / "config", now=NOW,
-                 client=BrokenG2B(), s2b_client=BrokenS2B({}, {}))
+                 client=BrokenG2B(), s2b_client=BrokenS2B({}, {}), agency_client=BrokenAgency())
 
 
 def test_old_db_without_new_columns_still_works(tmp_path):

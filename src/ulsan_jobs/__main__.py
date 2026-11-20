@@ -4,7 +4,7 @@
                              [--retry-list FILE] [--catch-up] [--once-daily]
     python -m ulsan_jobs check-source ID [ID ...]   # 소스만 시험 수집 (DB·메일 없음)
     python -m ulsan_jobs send-test-mail             # 메일 설정 확인
-    python -m ulsan_jobs camp [--no-mail] [--days N] # 캠프·교육 수주 공고: 나라장터(G2B_API_KEY) + S2B
+    python -m ulsan_jobs camp [--no-mail] [--days N] # 캠프·교육 수주 공고: 나라장터(G2B_API_KEY) + S2B + 기관 입찰
     python -m ulsan_jobs briefing [--no-mail] [--force] # 오늘의 브리핑 (BRIEFING_TO 필요)
 """
 from __future__ import annotations
@@ -119,6 +119,8 @@ def cmd_camp(args) -> int:
     print(f"\n=== 캠프·교육 수주 공고 {out.now:%Y-%m-%d %H:%M} ===")
     print(f"나라장터 용역 공고 {out.scanned}건 · 키워드 일치 {out.matched}건 · API 호출 {out.calls}회")
     print(f"S2B 학교 용역 견적 {out.s2b_scanned}건 · 키워드 일치 {out.s2b_matched}건 · 요청 {out.s2b_calls}회")
+    if out.agency_calls:
+        print(f"기관 입찰 게시판 글 {out.agency_scanned}건 · 키워드 일치 {out.agency_matched}건 · 요청 {out.agency_calls}회")
     print(f"새 공고 {len(out.new)}건")
     for err in out.errors:
         print(f"  ⚠ 읽지 못함: {err}")
@@ -144,6 +146,7 @@ def cmd_camp(args) -> int:
         counts = {t: sum(1 for b in out.new if b.tier == t) for t in ("바로지원", "검토", "참고")}
         mail = "발송함" if out.mailed else "안 보냄(--no-mail)" if args.no_mail else "새 공고 없음"
         summary = (f"나라장터 {out.scanned}건 중 {out.matched}건 · S2B {out.s2b_scanned}건 중 {out.s2b_matched}건 일치"
+                   f" · 기관 {out.agency_scanned}건 중 {out.agency_matched}건"
                    f" · 새 공고 {len(out.new)}건 (바로지원 {counts['바로지원']} · 검토 {counts['검토']}"
                    f" · 참고 {counts['참고']}) · 메일 {mail}")
         print(f"::notice title=캠프·교육 수주 결과::{summary}")
