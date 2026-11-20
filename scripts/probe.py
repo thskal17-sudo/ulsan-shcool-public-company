@@ -353,6 +353,8 @@ def main() -> int:
     parser.add_argument("--data", default="", help="--form-post 에 더할 값 (a=1&b=2)")
     parser.add_argument("--attach", action="store_true", help="--url(상세 페이지)의 첨부 공고문을 내려받아 글자와 마감일 확인")
     parser.add_argument("--attach-template", default=None, help="--attach 에서 쓸 첨부 주소 틀 (sources.yaml 의 attachment_template)")
+    parser.add_argument("--direct", action="store_true",
+                        help="국내 중계(KR_PROXY_URL)를 쓰지 않고 해외(GitHub) 서버에서 바로 접속해 본다")
     parser.add_argument("--page-info", action="store_true", help="--url(상세 페이지) 본문 글자로 찾은 강사잇다 칸만 출력")
     args = parser.parse_args()
     global RAW, RAW_FROM, GREP, FOLLOW_JS, FORM_POST
@@ -362,6 +364,9 @@ def main() -> int:
 
         FORM_POST = (args.form_post, dict(parse_qsl(args.data, keep_blank_values=True)))
     GREP = re.compile(args.grep) if args.grep else None
+    if args.direct:
+        HTTP.kr_proxy = None
+        print("국내 중계 없이 바로 접속합니다 (--direct)")
     FOLLOW_JS = args.follow_js
     if args.browser_ua:
         HTTP.session.headers["User-Agent"] = (
