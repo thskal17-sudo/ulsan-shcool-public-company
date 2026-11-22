@@ -16,6 +16,7 @@ options (모두 선택)
     org_name        기관명 기본값 (작성자 열이 '관리자' 등일 때)
     link_base       상대 링크를 풀 기준 주소 (페이지 주소와 다를 때. <base href> 가 있으면 자동 적용)
     row_must_contain 이 글자가 있는 행만 (예: 근무지 열이 있는 전국 게시판에서 '울산')
+    row_must_not_match 이 정규식이 맞는 행은 뺀다 (예: 다른 기관 공고를 퍼 온 글 — 육아종합지원센터끼리 채용 공고를 서로 올림)
 """
 from __future__ import annotations
 
@@ -261,8 +262,11 @@ def parse_board(html: bytes | str, base_url: str, opts: dict, today: date) -> li
     col = _column_index(headers)
     out: list[BoardRow] = []
     must = opts.get("row_must_contain")
+    must_not = re.compile(opts["row_must_not_match"]) if opts.get("row_must_not_match") else None
     for tr in rows:
         if must and must not in tr.get_text():
+            continue
+        if must_not and must_not.search(tr.get_text(" ")):
             continue
         tds = tr.find_all("td")
         aligned = bool(headers) and len(tds) == len(headers)

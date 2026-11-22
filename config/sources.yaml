@@ -557,6 +557,7 @@ sources:
     verified: true
     options:
       key_param: wr_id
+      row_must_not_match: "(북구|울주군?)\\s*육아종합"  # 북구·울주 센터 공고는 각 센터 게시판에서 받음 (중구·동구 센터 공고는 여기서 받음)
       org_name: 울산남구육아종합지원센터
 
   - id: bukgu_childcare
@@ -572,6 +573,7 @@ sources:
     verified: true
     options:
       key_param: sn
+      row_must_not_match: "(남구|중구|동구|울주군?)\\s*육아종합"  # 다른 센터 공고를 퍼 온 글은 뺌
       org_name: 울산북구육아종합지원센터
 
   - id: ulju_childcare
@@ -587,6 +589,7 @@ sources:
     verified: true
     options:
       key_param: sn
+      row_must_not_match: "(남구|북구|중구|동구)\\s*육아종합"  # 다른 센터 공고를 퍼 온 글은 뺌
       org_name: 울산울주군육아종합지원센터
 
   - id: usw_hire
