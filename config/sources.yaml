@@ -897,7 +897,7 @@ sources:
     enabled: true
     verified: true
     options:
-      row_selector: "div.board_list li"
+      row_selector: "div.board_list li:not(div.paging li)"  # 쪽 번호 목록은 뺀다
       link_template: "https://www.uri.re.kr/cop/bbs/selectArticleDetail.do?nttId={0}&bbsId={1}&menuNo=3030000"
       key_param: nttId
       org_name: 울산연구원
