@@ -543,6 +543,52 @@ sources:
   # 동구는 시설관리공단이 없음 (체육시설 직영·위탁)
 
   # ─────────────────────────────── 여성·가족
+  # 육아종합지원센터: 놀이·부모교육 프로그램 강사 채용이 공지사항에 올라옴. 목록 제목이 '..'로 잘리면 상세에서 전체 제목을 받음
+  - id: namgu_childcare
+    name: 울산남구육아종합지원센터 - 공지사항 (프로그램 강사 채용 등)
+    org_type: 여성·가족
+    district: 남구
+    collector: generic_board
+    url: https://www.namgui.or.kr/bbs/board.php?bo_table=notice
+    pages: 1
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      key_param: wr_id
+      org_name: 울산남구육아종합지원센터
+
+  - id: bukgu_childcare
+    name: 울산북구육아종합지원센터 - 공지사항
+    org_type: 여성·가족
+    district: 북구
+    collector: generic_board
+    url: https://www.bukguscc.or.kr/board/list.asp?BoardID=0001
+    pages: 1
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      key_param: sn
+      org_name: 울산북구육아종합지원센터
+
+  - id: ulju_childcare
+    name: 울산울주군육아종합지원센터 - 공지사항
+    org_type: 여성·가족
+    district: 울주군
+    collector: generic_board
+    url: https://uljukids.or.kr/new/board/list.asp?BoardID=0006
+    pages: 1
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      key_param: sn
+      org_name: 울산울주군육아종합지원센터
+
   - id: usw_hire
     name: 울산여성인력개발센터 - 채용공고
     org_type: 여성·가족
