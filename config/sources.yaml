@@ -147,6 +147,62 @@ sources:
     options:
       key_param: q_bbsDocNo
       org_name: 울산광역시유아교육진흥원
+  - id: umc_notice
+    name: 울산마을교육공동체거점센터 - 공지사항 (청소년자치배움터 외래강사·마을교사 모집)
+    org_type: 교육청·학교
+    district: 울산전체
+    collector: use_cms
+    url: https://use.go.kr/umc/user/bbs/BD_selectBbsList.do?q_bbsSn=1014
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: q_bbsDocNo
+      org_name: 울산마을교육공동체거점센터
+  - id: usgbe_notice
+    name: 울산강북교육지원청 - 공지사항 (채용·모집)
+    org_type: 교육청·학교
+    district: 울산전체
+    collector: use_cms
+    url: https://use.go.kr/usgbe/user/bbs/BD_selectBbsList.do?q_bbsSn=1340
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: q_bbsDocNo
+      org_name: 울산강북교육지원청
+  - id: usgne_notice
+    name: 울산강남교육지원청 - 공지사항 (채용·모집)
+    org_type: 교육청·학교
+    district: 울산전체
+    collector: use_cms
+    url: https://use.go.kr/usgne/user/bbs/BD_selectBbsList.do?q_bbsSn=1277
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: q_bbsDocNo
+      org_name: 울산강남교육지원청
+  - id: usecc_notice
+    name: 울산학생교육문화회관 - 공지사항
+    org_type: 교육청·학교
+    district: 울산전체
+    collector: use_cms
+    url: https://use.go.kr/usecc/user/bbs/BD_selectBbsList.do?q_bbsSn=1468
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: q_bbsDocNo
+      org_name: 울산학생교육문화회관
   - id: usm_notice
     name: 울산과학관 - 공지사항
     org_type: 교육청·학교
