@@ -147,6 +147,62 @@ sources:
     options:
       key_param: q_bbsDocNo
       org_name: 울산광역시유아교육진흥원
+  - id: umc_notice
+    name: 울산마을교육공동체거점센터 - 공지사항 (청소년자치배움터 외래강사·마을교사 모집)
+    org_type: 교육청·학교
+    district: 울산전체
+    collector: use_cms
+    url: https://use.go.kr/umc/user/bbs/BD_selectBbsList.do?q_bbsSn=1014
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: q_bbsDocNo
+      org_name: 울산마을교육공동체거점센터
+  - id: usgbe_notice
+    name: 울산강북교육지원청 - 공지사항 (채용·모집)
+    org_type: 교육청·학교
+    district: 울산전체
+    collector: use_cms
+    url: https://use.go.kr/usgbe/user/bbs/BD_selectBbsList.do?q_bbsSn=1340
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: q_bbsDocNo
+      org_name: 울산강북교육지원청
+  - id: usgne_notice
+    name: 울산강남교육지원청 - 공지사항 (채용·모집)
+    org_type: 교육청·학교
+    district: 울산전체
+    collector: use_cms
+    url: https://use.go.kr/usgne/user/bbs/BD_selectBbsList.do?q_bbsSn=1277
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: q_bbsDocNo
+      org_name: 울산강남교육지원청
+  - id: usecc_notice
+    name: 울산학생교육문화회관 - 공지사항
+    org_type: 교육청·학교
+    district: 울산전체
+    collector: use_cms
+    url: https://use.go.kr/usecc/user/bbs/BD_selectBbsList.do?q_bbsSn=1468
+    pages: 1
+    keyword_filter: true
+    phase: 3
+    enabled: true
+    verified: true
+    options:
+      key_param: q_bbsDocNo
+      org_name: 울산학생교육문화회관
   - id: usm_notice
     name: 울산과학관 - 공지사항
     org_type: 교육청·학교
@@ -883,6 +939,41 @@ sources:
       page_param: page
       key_param: "no"
       org_name: 울산경제일자리진흥원
+
+  # 울산인재평생교육진흥원은 2022년 통폐합으로 울산연구원에 흡수됨 (평생학습박람회 등 평생교육 업무)
+  - id: uri_notice
+    name: 울산연구원 - 공지사항
+    org_type: 시 산하기관
+    district: 울산전체
+    collector: generic_board
+    url: https://www.uri.re.kr/contPage.do?menuNo=3030000
+    pages: 1
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      row_selector: "div.board_list li:not(div.paging li)"  # 쪽 번호 목록은 뺀다
+      link_template: "https://www.uri.re.kr/cop/bbs/selectArticleDetail.do?nttId={0}&bbsId={1}&menuNo=3030000"
+      key_param: nttId
+      org_name: 울산연구원
+
+  - id: uri_recruit
+    name: 울산연구원 - 채용정보
+    org_type: 시 산하기관
+    district: 울산전체
+    collector: generic_board
+    url: https://www.uri.re.kr/contPage.do?menuNo=3040000
+    pages: 1
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      row_selector: "div.board_app_list li:has(a[href*=EgovEventReqstDetail])"
+      key_param: eventId
+      detail_get: false  # 상세는 POST 폼으로만 열림
+      org_name: 울산연구원
 
   - id: umca_hire
     name: 울산도시공사 - 채용공고
