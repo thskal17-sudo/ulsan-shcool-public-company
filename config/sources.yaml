@@ -884,6 +884,41 @@ sources:
       key_param: "no"
       org_name: 울산경제일자리진흥원
 
+  # 울산인재평생교육진흥원은 2022년 통폐합으로 울산연구원에 흡수됨 (평생학습박람회 등 평생교육 업무)
+  - id: uri_notice
+    name: 울산연구원 - 공지사항
+    org_type: 시 산하기관
+    district: 울산전체
+    collector: generic_board
+    url: https://www.uri.re.kr/contPage.do?menuNo=3030000
+    pages: 1
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      row_selector: "div.board_list li"
+      link_template: "https://www.uri.re.kr/cop/bbs/selectArticleDetail.do?nttId={0}&bbsId={1}&menuNo=3030000"
+      key_param: nttId
+      org_name: 울산연구원
+
+  - id: uri_recruit
+    name: 울산연구원 - 채용정보
+    org_type: 시 산하기관
+    district: 울산전체
+    collector: generic_board
+    url: https://www.uri.re.kr/contPage.do?menuNo=3040000
+    pages: 1
+    keyword_filter: true
+    phase: 2
+    enabled: true
+    verified: true
+    options:
+      row_selector: "div.board_app_list li:has(a[href*=EgovEventReqstDetail])"
+      key_param: eventId
+      detail_get: false  # 상세는 POST 폼으로만 열림
+      org_name: 울산연구원
+
   - id: umca_hire
     name: 울산도시공사 - 채용공고
     org_type: 시 산하기관
