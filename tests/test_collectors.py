@@ -127,6 +127,28 @@ def test_json_board_spring_page_items():
     assert items[0]["posted"] == date(2026, 10, 6)
 
 
+
+def test_json_board_lib_use_items():
+    # 울산교육청통합도서관 /api/homepageBoardList: {LIST: [...]}, 마감일은 본문 글자에서
+    from ulsan_jobs.collectors.json_board import parse_json_items
+
+    payload = {"RESULT": "SUCCESS", "LIST": [
+        {"REC_KEY": "6421", "BOARD_CONTENT_TITLE": "2027년 겨울방학특강 강사 모집 ", "CREATE_DATE": "2026-09-20 09:47:29",
+         "CTX_BOARD_CONTENT_TEXT": "&nbsp;접수기간: 2026. 10. 1.(목) ~ 10. 8.(목) 18:00까지&nbsp;"},
+    ]}
+    opts = {
+        "items_key": "LIST",
+        "key_field": "REC_KEY",
+        "title_fields": ["BOARD_CONTENT_TITLE"],
+        "date_fields": ["CREATE_DATE"],
+        "text_fields": ["CTX_BOARD_CONTENT_TEXT"],
+        "link_template": "https://lib.use.go.kr/ulju/board/notice/{key}",
+    }
+    item = parse_json_items(payload, opts, TODAY)[0]
+    assert item["title"] == "2027년 겨울방학특강 강사 모집"
+    assert item["url"] == "https://lib.use.go.kr/ulju/board/notice/6421"
+    assert item["posted"] == date(2026, 9, 20) and item["deadline"] == date(2026, 10, 8)
+
 def test_ujcmc_style_template(fixture_bytes):
     html = """<table><tr><th>번호</th><th>제목</th><th>작성자</th><th>등록일</th></tr>
     <tr><td>528</td><td><a href="javascript:boardView('employ','528','');">중구수영장 시간강사(프리랜서) 모집 공고</a></td>
