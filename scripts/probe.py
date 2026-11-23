@@ -389,7 +389,8 @@ def main() -> int:
             print(f"POST {clip(url, 140)} data={args.data}")
             try:
                 r = HTTP.post(url, data=dict(parse_qsl(args.data, keep_blank_values=True)))
-                print(f"  status={r.status_code} type={r.headers.get('content-type')}\n  {r.text[: args.post_raw]}")
+                start = max(r.text.find(args.raw_from) - 300, 0) if args.raw_from else 0
+                print(f"  status={r.status_code} type={r.headers.get('content-type')}\n  {r.text[start : start + args.post_raw]}")
             except Exception as exc:  # noqa: BLE001 - 진단 도구라 모든 오류를 보고
                 print(f"  ERROR {type(exc).__name__}: {clip(str(exc), 200)}")
         return 0
