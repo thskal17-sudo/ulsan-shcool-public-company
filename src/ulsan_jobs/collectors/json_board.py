@@ -14,6 +14,8 @@ options
     title_fields   제목 후보 키 목록
     date_fields    작성일 후보 키 목록
     link_template  상세 주소 틀. {key} 와 항목의 다른 키를 쓸 수 있다
+    text_fields    본문 글자 키 목록. 있으면 여기서 마감일을 찾는다 (상세 페이지도 스크립트로 그리는 사이트)
+    detail_get     false 면 상세 페이지를 열지 않는다 (마감일은 text_fields 로만)
     org_name       기관명
 세션 쿠키가 필요한 사이트가 있어 source.url(화면 주소)을 먼저 한 번 연다.
 """
@@ -22,7 +24,7 @@ from __future__ import annotations
 import html
 import re
 
-from ..dates import parse_date
+from ..dates import extract_deadline, parse_date
 from ..models import Posting
 from .base import Collector
 
@@ -64,6 +66,9 @@ def parse_json_items(payload: dict, opts: dict, today) -> list[dict]:
                 "key": key,
                 "url": url,
                 "posted": parse_date(_first(item, opts.get("date_fields", DEFAULT_DATE_FIELDS)), today),
+                "deadline": extract_deadline(_clean_title(_first(item, opts["text_fields"])), today)
+                if opts.get("text_fields")
+                else None,
             }
         )
     return out
@@ -98,7 +103,8 @@ class JsonBoardCollector(Collector):
                         org_type=self.source.org_type,
                         district=self.source.district,
                         posted_date=i["posted"],
-                        detail_url=i["url"] or None,
+                        deadline=i["deadline"],
+                        detail_url=(i["url"] or None) if opts.get("detail_get", True) else None,
                     )
                 )
             if not fresh or not opts.get("page_param"):

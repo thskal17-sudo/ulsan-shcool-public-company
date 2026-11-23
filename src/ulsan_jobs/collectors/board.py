@@ -42,7 +42,7 @@ _HEADER_MAP = {
 }
 # 게시글 식별값에서 빼는 쿼리 파라미터 (페이지 번호·검색어·세션 등은 같은 글이라도 달라진다)
 _VOLATILE_PARAMS = re.compile(r"page|currpage|rowperpage|search|sort|_csrf|jsessionid", re.I)
-_NOT_ORG = re.compile(r"^(관리자|담당자|admin|운영자|홈페이지|-)?$", re.I)
+_NOT_ORG = re.compile(r"^(최고관리자|관리자|담당자|admin|운영자|홈페이지|-)?$", re.I)
 _JS_CALL = re.compile(r"([A-Za-z_$][\w$.]*)\s*\(([^)]*)\)")
 _JS_ARG = re.compile(r"""['"]([^'"]*)['"]|(-?\d+)""")
 
