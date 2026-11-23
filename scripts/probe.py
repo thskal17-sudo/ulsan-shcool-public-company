@@ -354,6 +354,7 @@ def main() -> int:
     parser.add_argument("--attach", action="store_true", help="--url(상세 페이지)의 첨부 공고문을 내려받아 글자와 마감일 확인")
     parser.add_argument("--attach-template", default=None, help="--attach 에서 쓸 첨부 주소 틀 (sources.yaml 의 attachment_template)")
     parser.add_argument("--page-info", action="store_true", help="--url(상세 페이지) 본문 글자로 찾은 강사잇다 칸만 출력")
+    parser.add_argument("--post-raw", type=int, default=0, help="--url 들에 --data 를 POST 하고 응답 본문을 이 글자 수만큼 출력 (JSON API 확인용)")
     args = parser.parse_args()
     global RAW, RAW_FROM, GREP, FOLLOW_JS, FORM_POST
     RAW, RAW_FROM = args.raw, args.raw_from
@@ -380,6 +381,17 @@ def main() -> int:
     if args.attach:
         for url in args.url:
             attach_report(url, args.attach_template, args.around)
+        return 0
+    if args.post_raw:
+        from urllib.parse import parse_qsl
+
+        for url in args.url:
+            print(f"POST {clip(url, 140)} data={args.data}")
+            try:
+                r = HTTP.post(url, data=dict(parse_qsl(args.data, keep_blank_values=True)))
+                print(f"  status={r.status_code} type={r.headers.get('content-type')}\n  {r.text[: args.post_raw]}")
+            except Exception as exc:  # noqa: BLE001 - 진단 도구라 모든 오류를 보고
+                print(f"  ERROR {type(exc).__name__}: {clip(str(exc), 200)}")
         return 0
     if args.page_info:
         for url in args.url:
